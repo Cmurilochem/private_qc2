@@ -70,16 +70,3 @@ git clone git@github.com:qc2nl/qc2.git
 cd qc2
 python3 -m pip install -e .[pennylane] # (use ".[pennylane]" if you have zsh shell)
 ```
-
-## Documentation
-
-Include a link to your project's full documentation here.
-
-## Contributing
-
-If you want to contribute to the development of qc2,
-have a look at the [contribution guidelines](CONTRIBUTING.md).
-
-## Credits
-
-This package was created with [Cookiecutter](https://github.com/audreyr/cookiecutter) and the [NLeSC/python-template](https://github.com/NLeSC/python-template).
