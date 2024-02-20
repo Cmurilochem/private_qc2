@@ -1,3 +1,29 @@
+# This is a private version of the [public qc2](https://github.com/qc2nl/qc2.git) repo
+
+### Remote URLs
+To check our remote URL, do:
+```console
+git remote -v                                                    
+origin	https://github.com/Cmurilochem/private_qc2.git (fetch)
+origin	https://github.com/Cmurilochem/private_qc2.git (push)
+public-fork	https://github.com/Cmurilochem/qc2.git (fetch)
+public-fork	https://github.com/Cmurilochem/qc2.git (push)
+```
+
+### Pushing to the private repo
+If you want to push and contribute/create a PR, on the private repo, please, do so via `origin`:
+```console
+git push origin <branch>
+```
+Or if you want to pull/fetch/merge using any private branch:
+```console
+git pull origin <branch>
+```
+
+### Updating the private repo with the public fork
+```console
+git pull public-fork <branch>
+```
 
 # Quantum Computing for Quantum Chemistry
 <!-- (Customize these badges with your own links, and check https://shields.io/ or https://badgen.net/ to see which other badges are available.) -->
