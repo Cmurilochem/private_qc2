@@ -4,6 +4,9 @@
 To check our remote URL, do:
 ```console
 git remote -v                                                    
+```
+We are going to see the following addresses:
+```console
 origin	https://github.com/Cmurilochem/private_qc2.git (fetch)
 origin	https://github.com/Cmurilochem/private_qc2.git (push)
 public-fork	https://github.com/Cmurilochem/qc2.git (fetch)
