@@ -10,12 +10,7 @@ from ..utils.active_sapce import ActiveSpace
 class VQE(VQEBASE):
     """Main class for VQE"""
 
-    def __init__(
-        self,
-        qc2data,
-        active_space=ActiveSpace((2, 2), 2),
-        mapper=JordanWignerMapper(),
-    ):
+    def __init__(self, qc2data=None, **kwargs):
         """Initiate the class
 
         Args:
@@ -24,50 +19,99 @@ class VQE(VQEBASE):
             mapper (qiskit_nature.second_q.mappers, optional): Method used to map the qubits. Defaults to JordanWignerMapper().
         """
 
-        super().__init__(qc2data, "qiskit", active_space=active_space, mapper=mapper)
+        super().__init__(qc2data, "qiskit")
 
-    def run(self, **kwargs):
+        # init active space and mapper
+        self.active_space = (
+            ActiveSpace((2, 2), 2)
+            if "active_space" not in kwargs
+            else kwargs["active_space"]
+        )
+        self.mapper = (
+            JordanWignerMapper() if "mapper" not in kwargs else kwargs["mapper"]
+        )
 
-        def _get_default_reference(active_space, mapper):
-            return HartreeFock(
-                active_space.num_active_spatial_orbitals,
-                active_space.num_active_electrons,
-                mapper,
-            )
+        # create Hamiltonian
+        self._init_qubit_hamiltonian(self, self.format, self.active_space, self.mapper)
 
-        def _get_default_ansatz(active_space, mapper, reference_state):
-
-            return UCC(
-                num_spatial_orbitals=active_space.num_active_spatial_orbitals,
-                num_particles=active_space.num_active_electrons,
-                qubit_mapper=mapper,
-                initial_state=reference_state,
-                excitations="sdtq",
-            )
-
-        def _get_default_init_params(nparams):
-            return [0.0] * nparams
-
-        estimator = Estimator() if "estimator" not in kwargs else kwargs["estimator"]
-        optimizer = SLSQP() if "optimizer" not in kwargs else kwargs["optimizer"]
-        reference_state = (
-            _get_default_reference(self.active_space, self.mapper)
+        # init circuit
+        self.estimator = (
+            Estimator() if "estimator" not in kwargs else kwargs["estimator"]
+        )
+        self.optimizer = SLSQP() if "optimizer" not in kwargs else kwargs["optimizer"]
+        self.reference_state = (
+            self._get_default_reference(self.active_space, self.mapper)
             if "reference_state" not in kwargs
             else kwargs["reference_state"]
         )
-        ansatz = (
-            _get_default_ansatz(self.active_space, self.mapper, reference_state)
+        self.ansatz = (
+            self._get_default_ansatz(
+                self.active_space, self.mapper, self.reference_state
+            )
             if "ansatz" not in kwargs
             else kwargs["ansatz"]
         )
-        params = (
-            _get_default_init_params(self.ansatz.num_parameters)
+        self.params = (
+            self._get_default_init_params(self.ansatz.num_parameters)
             if "init_params" not in kwargs
             else kwargs["init_params"]
         )
 
-        solver = vqe_solver(estimator, ansatz, optimizer)
-        solver.initial_point = params
+    @staticmethod
+    def _get_default_reference(active_space, mapper):
+        """Set up the default reference state circuit
+
+        Args:
+            active_space (ActiveSpace): description of the active space
+            mapper (mapper): mapper class instance
+
+        Returns:
+            QuantumCircuit: hartree fock circuit
+        """
+        return HartreeFock(
+            active_space.num_active_spatial_orbitals,
+            active_space.num_active_electrons,
+            mapper,
+        )
+
+    @staticmethod
+    def _get_default_ansatz(active_space, mapper, reference_state):
+        """Set up the default UCC ansatz from a HF reference
+
+        Args:
+            active_space (ActiveSpace): description of the active space
+            mapper (mapper): mapper class instance
+            reference_state (QuantumCircuit): reference state circuit
+
+        Returns:
+            QuantumCircuit: circuit ansaz
+        """
+
+        return UCC(
+            num_spatial_orbitals=active_space.num_active_spatial_orbitals,
+            num_particles=active_space.num_active_electrons,
+            qubit_mapper=mapper,
+            initial_state=reference_state,
+            excitations="sdtq",
+        )
+
+    @staticmethod
+    def _get_default_init_params(nparams):
+        """Set up the init para,s
+
+        Args:
+            nparams (np.ndarray): default values
+
+        Returns:
+            List : List of params values
+        """
+        return [0.0] * nparams
+
+    def run(self):
+        """Run the algo"""
+
+        solver = vqe_solver(self.estimator, self.ansatz, self.optimizer)
+        solver.initial_point = self.params
         result = vqe_solver.compute_minimum_eigenvalue(self.qubit_op)
 
         print("=== QISKIT VQE RESULTS ===")
