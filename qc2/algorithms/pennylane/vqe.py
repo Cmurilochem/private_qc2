@@ -1,7 +1,7 @@
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 import pennylane as qml
 from pennylane import numpy as np
-from ..utils.active_sapce import ActiveSpace
+from ..utils.active_space import ActiveSpace
 from ..base.vqe_base import VQEBASE
 
 
