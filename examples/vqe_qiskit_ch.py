@@ -14,8 +14,8 @@ from qiskit.primitives import Estimator
 
 from qc2.ase import PySCF
 from qc2.data import qc2Data
-from qc2.algorithms.qiskit.vqe import VQE
-from qc2.algorithms.utils.active_sapce import ActiveSpace
+from qc2.algorithms.qiskit import VQE
+from qc2.algorithms.utils import ActiveSpace
 
 # Avoid using the deprecated `PauliSumOp` object
 qiskit_nature.settings.use_pauli_sum_op = False

@@ -4,7 +4,7 @@ from qiskit_algorithms.minimum_eigensolvers import VQE as vqe_solver
 from qiskit.primitives import Estimator
 from qiskit_algorithms.optimizers import SLSQP
 from ..base.vqe_base import VQEBASE
-from ..utils.active_sapce import ActiveSpace
+from ..utils.active_space import ActiveSpace
 
 
 class VQE(VQEBASE):
@@ -84,7 +84,7 @@ class VQE(VQEBASE):
             reference_state (QuantumCircuit): reference state circuit
 
         Returns:
-            QuantumCircuit: circuit ansaz
+            QuantumCircuit: circuit ansatz
         """
 
         return UCC(
@@ -92,7 +92,7 @@ class VQE(VQEBASE):
             num_particles=active_space.num_active_electrons,
             qubit_mapper=mapper,
             initial_state=reference_state,
-            excitations="sdtq",
+            excitations="sd",
         )
 
     @staticmethod
@@ -112,7 +112,7 @@ class VQE(VQEBASE):
 
         solver = vqe_solver(self.estimator, self.ansatz, self.optimizer)
         solver.initial_point = self.params
-        result = vqe_solver.compute_minimum_eigenvalue(self.qubit_op)
+        result = solver.compute_minimum_eigenvalue(self.qubit_op)
 
         print("=== QISKIT VQE RESULTS ===")
         print(f"* Electronic ground state energy (Hartree): {result.eigenvalue}")
