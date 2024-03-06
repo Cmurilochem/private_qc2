@@ -22,6 +22,7 @@ from qiskit_nature.second_q.transformers import ActiveSpaceTransformer
 from pennylane.operation import Operator
 from qc2.pennylane.convert import import_operator
 from ..algorithms.base.base_algorithm import BaseAlgorithm
+from qc2.ase.qc2_ase_base_class import BaseQc2ASECalculator
 
 # avoid using the deprecated `PauliSumOp` object
 qiskit_nature.settings.use_pauli_sum_op = False
@@ -113,6 +114,8 @@ class qc2Data:
         self._algorithm = algorithm
         if hasattr(algorithm, "set_qc2data"):
             algorithm.set_qc2data(self)
+        else:
+            raise ValueError("{} can't set qc2data".format(algorithm.__name__))
 
     def _check_filename_extension(self) -> None:
         """Ensures that files have proper extensions."""
@@ -208,6 +211,10 @@ class qc2Data:
         >>> qc2data.run()
         >>> fcidump = qc2data.read_schema()
         """
+
+        # create a generic calculator
+        self._molecule.calc = BaseQc2ASECalculator()
+
         # read required data from the hdf5 or fcidump file
         self._molecule.calc.schema_format = self._schema
         return self._molecule.calc.load(self._filename)

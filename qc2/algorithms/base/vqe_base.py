@@ -16,17 +16,13 @@ class VQEBASE(BaseAlgorithm):
         self.qc2data = qc2data
         self.format = format
 
-    def set_qc2data(self, qc2data):
-        """set the data"""
-        self.qc2data = qc2data
-
-    def _init_qubit_hamiltonian(self, format, active_space, mapper):
-        self.active_space = active_space
-        self.mapper = mapper
+    def _init_qubit_hamiltonian(self):
+        if self.qc2data is None:
+            raise ValueError("qc2data attirbute set incorrectly in VQE")
 
         self.e_core, self.qubit_op = self.qc2data.get_qubit_hamiltonian(
-            active_space.num_active_electrons,
-            active_space.num_active_spatial_orbitals,
-            mapper,
-            format=format,
+            self.active_space.num_active_electrons,
+            self.active_space.num_active_spatial_orbitals,
+            self.mapper,
+            format=self.format,
         )

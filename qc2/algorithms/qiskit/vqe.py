@@ -10,7 +10,17 @@ from ..utils.active_space import ActiveSpace
 class VQE(VQEBASE):
     """Main class for VQE"""
 
-    def __init__(self, qc2data=None, **kwargs):
+    def __init__(
+        self,
+        qc2data=None,
+        ansatz=None,
+        active_space=None,
+        mapper=None,
+        estimator=None,
+        optimizer=None,
+        reference_state=None,
+        init_params=None,
+    ):
         """Initiate the class
 
         Args:
@@ -23,38 +33,29 @@ class VQE(VQEBASE):
 
         # init active space and mapper
         self.active_space = (
-            ActiveSpace((2, 2), 2)
-            if "active_space" not in kwargs
-            else kwargs["active_space"]
+            ActiveSpace((2, 2), 2) if active_space is None else active_space
         )
-        self.mapper = (
-            JordanWignerMapper() if "mapper" not in kwargs else kwargs["mapper"]
-        )
-
-        # create Hamiltonian
-        self._init_qubit_hamiltonian(self, self.format, self.active_space, self.mapper)
+        self.mapper = JordanWignerMapper() if mapper is None else mapper
 
         # init circuit
-        self.estimator = (
-            Estimator() if "estimator" not in kwargs else kwargs["estimator"]
-        )
-        self.optimizer = SLSQP() if "optimizer" not in kwargs else kwargs["optimizer"]
+        self.estimator = Estimator() if estimator is None else estimator
+        self.optimizer = SLSQP() if optimizer is None else optimizer
         self.reference_state = (
             self._get_default_reference(self.active_space, self.mapper)
-            if "reference_state" not in kwargs
-            else kwargs["reference_state"]
+            if reference_state is None
+            else reference_state
         )
         self.ansatz = (
             self._get_default_ansatz(
                 self.active_space, self.mapper, self.reference_state
             )
-            if "ansatz" not in kwargs
-            else kwargs["ansatz"]
+            if ansatz is None
+            else ansatz
         )
         self.params = (
             self._get_default_init_params(self.ansatz.num_parameters)
-            if "init_params" not in kwargs
-            else kwargs["init_params"]
+            if init_params is None
+            else init_params
         )
 
     @staticmethod
@@ -109,6 +110,9 @@ class VQE(VQEBASE):
 
     def run(self):
         """Run the algo"""
+
+        # create Hamiltonian
+        self._init_qubit_hamiltonian()
 
         solver = vqe_solver(self.estimator, self.ansatz, self.optimizer)
         solver.initial_point = self.params

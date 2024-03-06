@@ -25,7 +25,7 @@ qiskit_nature.settings.use_pauli_sum_op = False
 mol = molecule("CH")
 
 # file to save data
-hdf5_file = "CH_ase_dirac_qiskit.hdf5"
+hdf5_file = "CH_pyscf_qiskit.hdf5"
 
 # init the hdf5 file
 qc2data = qc2Data(hdf5_file, mol)
@@ -37,11 +37,12 @@ qc2data.molecule.calc = PySCF(method="scf.UHF", basis="sto-3g", multiplicity=2)
 qc2data.run()
 
 # set up VQE calc
-active_space = ActiveSpace(num_active_electrons=(3, 2), num_active_spatial_orbitals=5)
-optimizer = SLSQP()
-estimator = Estimator()
 qc2data.algorithm = VQE(
-    active_sapce=active_space, optimizer=optimizer, estimator=estimator
+    active_space=ActiveSpace(
+        num_active_electrons=(3, 2), num_active_spatial_orbitals=5
+    ),
+    optimizer=SLSQP(),
+    estimator=Estimator(),
 )
 
 # run the calc
