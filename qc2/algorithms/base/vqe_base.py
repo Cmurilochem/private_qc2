@@ -1,4 +1,4 @@
-from .base_algorithm import BaseAlgorithm
+from qc2.algorithms.base import BaseAlgorithm
 
 
 class VQEBASE(BaseAlgorithm):

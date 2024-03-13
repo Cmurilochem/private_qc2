@@ -3,8 +3,8 @@ from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 from qiskit_algorithms.minimum_eigensolvers import VQE as vqe_solver
 from qiskit.primitives import Estimator
 from qiskit_algorithms.optimizers import SLSQP
-from ..base.vqe_base import VQEBASE
-from ..utils.active_space import ActiveSpace
+from qc2.algorithms.base import VQEBASE
+from qc2.algorithms.utils import ActiveSpace
 
 
 class VQE(VQEBASE):

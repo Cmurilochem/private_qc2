@@ -1,8 +1,8 @@
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 import pennylane as qml
 from pennylane import numpy as np
-from ..utils.active_space import ActiveSpace
-from ..base.vqe_base import VQEBASE
+from qc2.algorithms.utils import ActiveSpace
+from qc2.algorithms.base import VQEBASE
 
 
 class VQE(VQEBASE):
@@ -42,13 +42,13 @@ class VQE(VQEBASE):
             else optimizer
         )
         self.reference_state = (
-            self._get_default_reference(self.active_space, self.mapper)
+            self._get_default_reference(self.qubits, self.electrons)
             if reference_state is None
             else reference_state
         )
-        self.circuit = (
+        self.ansatz = (
             self._get_default_ansatz(
-                self.qubits, self.electrons, self.reference_state, self.qubit_op
+                self.qubits, self.electrons, self.reference_state
             )
             if ansatz is None
             else ansatz
@@ -58,6 +58,8 @@ class VQE(VQEBASE):
             if init_params is None
             else init_params
         )
+        self.circuit = None
+        self.result = None
 
     @staticmethod
     def _get_default_reference(qubits, electrons):
@@ -73,7 +75,7 @@ class VQE(VQEBASE):
         return qml.qchem.hf_state(electrons, qubits)
 
     @staticmethod
-    def _get_default_ansatz(qubits, electrons, reference_state, qubit_op):
+    def _get_default_ansatz(qubits, electrons, reference_state):
         """Set up default ansatz
 
         Args:
@@ -91,16 +93,13 @@ class VQE(VQEBASE):
         # Map excitations to the wires the UCCSD circuit will act on
         s_wires, d_wires = qml.qchem.excitations_to_wires(singles, doubles)
 
-        # Define the device
-        dev = qml.device("default.qubit", wires=qubits)
-
-        # Define the qnode
-        @qml.qnode(dev)
-        def circuit(params):
-            qml.UCCSD(params, range(qubits), s_wires, d_wires, reference_state)
-            return qml.expval(qubit_op)
-
-        return circuit
+        # Return a function that applies the UCCSD ansatz
+        def ansatz(params):
+            qml.UCCSD(
+                params, wires=range(qubits), s_wires=s_wires,
+                d_wires=d_wires, init_state=reference_state
+            )
+        return ansatz
 
     @staticmethod
     def _get_default_init_param(qubits, electrons):
@@ -108,19 +107,40 @@ class VQE(VQEBASE):
         singles, doubles = qml.qchem.excitations(electrons, qubits)
         return np.zeros(len(singles) + len(doubles))
 
+    @staticmethod
+    def _build_circuit(dev, qubits, ansatz, qubit_op):
+        """Build and return a quantum circuit."""
+        # Define the device
+        device = qml.device(dev, wires=qubits)
+
+        # Define the QNode and call the ansatz function within it
+        @qml.qnode(device)
+        def circuit(params):
+            ansatz(params)
+            return qml.expval(qubit_op)
+
+        return circuit
+
     def run(self, niter=21):
         """Run the algo"""
 
         # create Hamiltonian
         self._init_qubit_hamiltonian()
 
+        # build circuit after having qubit hamiltonian
+        self.circuit = self._build_circuit(
+            "default.qubit", self.qubits, self.ansatz, self.qubit_op
+        )
+
         # Optimize the circuit parameters and compute the energy
         for _ in range(niter):
-            params, energy = self.optimizer.step_and_cost(self.circuit, self.params)
+            self.params, self.result = self.optimizer.step_and_cost(self.circuit, self.params)
+            #if n % 2 == 0:
+            #    print("step = {:},  E = {:.8f} Ha".format(n, self.result))
 
         print("=== PENNYLANE VQE RESULTS ===")
-        print(f"* Electronic ground state energy (Hartree): {energy}")
+        print(f"* Electronic ground state energy (Hartree): {self.result}")
         print(f"* Inactive core energy (Hartree): {self.e_core}")
-        print(f">>> Total ground state energy (Hartree): {energy+self.e_core}\n")
+        print(f">>> Total ground state energy (Hartree): {self.result+self.e_core}\n")
 
         # print(f"+++ Final parameters:{params}")
