@@ -6,7 +6,7 @@ import numpy as np
 from ase import Atoms
 from ase.units import Ha
 
-import qiskit_nature
+
 from qiskit.quantum_info import SparsePauliOp
 
 from qiskit_nature.second_q.formats.qcschema import QCSchema
@@ -24,11 +24,8 @@ from qiskit_nature.second_q.operators import ElectronicIntegrals
 
 from pennylane.operation import Operator
 from qc2.pennylane.convert import import_operator
-from ..algorithms.base.base_algorithm import BaseAlgorithm
+from qc2.algorithms.base import BaseAlgorithm
 from qc2.ase.qc2_ase_base_class import BaseQc2ASECalculator
-
-# avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
 
 
 class qc2Data:
