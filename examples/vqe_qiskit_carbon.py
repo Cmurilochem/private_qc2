@@ -9,16 +9,10 @@ Notes:
 
 from ase import Atoms
 
-import qiskit_nature
-
-
 from qc2.ase import PySCF
 from qc2.data import qc2Data
 from qc2.algorithms.qiskit import VQE
 from qc2.algorithms.utils import ActiveSpace
-
-# Avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
 
 
 # set Atoms object
@@ -38,10 +32,11 @@ qc2data.molecule.calc = PySCF(
 # run calculation and save qchem data in the hdf5 file
 qc2data.run()
 
-
 # set up VQE calc
 qc2data.algorithm = VQE(
-    active_space=ActiveSpace(num_active_electrons=(4, 2), num_active_spatial_orbitals=5)
+    active_space=ActiveSpace(
+        num_active_electrons=(4, 2), num_active_spatial_orbitals=5
+    )
 )
 
 # run the calc

@@ -9,7 +9,6 @@ Notes:
 import subprocess
 from ase.build import molecule
 
-import qiskit_nature
 from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 
@@ -17,9 +16,6 @@ from qc2.ase import Psi4
 from qc2.data import qc2Data
 from qc2.algorithms.qiskit import VQE
 from qc2.algorithms.utils import ActiveSpace
-
-# Avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
 
 
 def clean_up_Psi4_files():
@@ -43,7 +39,6 @@ qc2data.molecule.calc = Psi4(method="hf", basis="sto-3g")
 # run calculation and save qchem data in the hdf5 file
 qc2data.run()
 
-
 # set up VQE calc
 qc2data.algorithm = VQE(
     active_space=ActiveSpace(
@@ -56,5 +51,5 @@ qc2data.algorithm = VQE(
 # run the calc
 result = qc2data.algorithm.run()
 
-
 clean_up_Psi4_files()
+

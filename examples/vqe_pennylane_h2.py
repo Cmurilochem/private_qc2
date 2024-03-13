@@ -8,7 +8,7 @@ Notes:
 
 import subprocess
 from ase.build import molecule
-import qml
+import pennylane as qml
 from qc2.ase import DIRAC
 from qc2.data import qc2Data
 
@@ -37,7 +37,6 @@ qc2data.molecule.calc = DIRAC()  # default => RHF/STO-3G
 # run calculation and save qchem data in the hdf5 file
 qc2data.run()
 
-
 # set up VQE calc
 qc2data.algorithm = VQE(
     active_space=ActiveSpace(
@@ -48,6 +47,5 @@ qc2data.algorithm = VQE(
 
 # run the calc
 result = qc2data.algorithm.run()
-
 
 clean_up_DIRAC_files()

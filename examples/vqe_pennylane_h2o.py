@@ -31,7 +31,9 @@ qc2data.run()
 
 # set up VQE calc
 qc2data.algorithm = VQE(
-    active_space=ActiveSpace(num_active_electrons=(2, 2), num_active_spatial_orbitals=3)
+    active_space=ActiveSpace(
+        num_active_electrons=(2, 2), num_active_spatial_orbitals=3
+    )
 )
 
 # run the calc

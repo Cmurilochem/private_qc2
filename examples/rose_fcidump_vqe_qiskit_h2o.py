@@ -8,7 +8,6 @@ Notes:
 
 import subprocess
 
-import qiskit_nature
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCCSD
 
 
@@ -16,9 +15,6 @@ from qc2.ase import ROSE, ROSETargetMolecule, ROSEFragment
 from qc2.data import qc2Data
 from qc2.algorithms.qiskit import VQE
 from qc2.algorithms.utils import ActiveSpace
-
-# Avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
 
 
 def clean_up_ROSE_files():
@@ -71,14 +67,15 @@ qc2data.molecule.calc = ROSE(
 # run ROSE calculator
 qc2data.run()
 
-
 # set up VQE calc
 qc2data.algorithm = VQE(
-    active_space=ActiveSpace(num_active_electrons=(2, 2), num_active_spatial_orbitals=3)
+    active_space=ActiveSpace(
+        num_active_electrons=(2, 2),
+        num_active_spatial_orbitals=3
+    )
 )
 
 # run the calc
 result = qc2data.algorithm.run()
-
 
 clean_up_ROSE_files()

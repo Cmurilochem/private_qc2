@@ -9,20 +9,14 @@ Notes:
 import subprocess
 from ase.build import molecule
 
-import qiskit_nature
-from qiskit_nature.second_q.circuit.library import HartreeFock, UCCSD
 from qiskit_nature.second_q.mappers import BravyiKitaevMapper
 from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 
 from qc2.ase import DIRAC
 from qc2.data import qc2Data
-
 from qc2.algorithms.qiskit import VQE
 from qc2.algorithms.utils import ActiveSpace
-
-# Avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
 
 
 def clean_up_DIRAC_files():
@@ -46,7 +40,6 @@ qc2data.molecule.calc = DIRAC()  # default => RHF/STO-3G
 # run calculation and save qchem data in the hdf5 file
 qc2data.run()
 
-
 # set up VQE calc
 qc2data.algorithm = VQE(
     active_space=ActiveSpace(
@@ -58,6 +51,6 @@ qc2data.algorithm = VQE(
 )
 
 # run vqe
-qc2Data.algorithm.run()
+qc2data.algorithm.run()
 
 clean_up_DIRAC_files()

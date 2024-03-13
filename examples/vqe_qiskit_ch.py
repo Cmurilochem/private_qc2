@@ -8,7 +8,6 @@ Notes:
 
 from ase.build import molecule
 
-import qiskit_nature
 from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 
@@ -16,10 +15,6 @@ from qc2.ase import PySCF
 from qc2.data import qc2Data
 from qc2.algorithms.qiskit import VQE
 from qc2.algorithms.utils import ActiveSpace
-
-# Avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
-
 
 # set Atoms object
 mol = molecule("CH")
