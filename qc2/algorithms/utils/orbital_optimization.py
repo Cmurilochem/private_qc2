@@ -35,6 +35,8 @@ class OrbitalOptimization():
         nao (int): Number of spatial orbitals.
         n_active_orbitals (int): Number of active orbitals to consider.
         n_active_electrons (Tuple[int, int]): Number of active electrons.
+        freeze_active (bool, optional): Determines if the active orbitals are
+            frozen in the optimization process.
         occ_idx (list): Indices of occupied molecular orbitals.
         act_idx (list): Indices of active molecular orbitals.
         virt_idx (list): Indices of virtual molecular orbitals.
@@ -102,6 +104,7 @@ class OrbitalOptimization():
         # active space parameters
         self.n_active_orbitals = active_space.num_active_spatial_orbitals
         self.n_active_electrons = active_space.num_active_electrons
+        self.freeze_active = freeze_active
 
         # calculate active space params
         (self.occ_idx,
@@ -115,7 +118,7 @@ class OrbitalOptimization():
         # calculate non-redundant orbital rotations
         self.params_idx = get_non_redundant_indices(
             self.occ_idx, self.act_idx,
-            self.virt_idx, freeze_active
+            self.virt_idx, self.freeze_active
         )
 
         # set dimension of the kappa vector
@@ -166,32 +169,151 @@ class OrbitalOptimization():
 
     def orbital_optimization(
             self,
-            one_rdm: np.ndarray,
-            two_rdm: np.ndarray,
+            rdm1: np.ndarray,
+            rdm2: np.ndarray,
             kappa_init: Optional[List] = None,
-    ):
-        """Optimize orbital parameters."""
+    ) -> Tuple[List, float]:
+        """Optimize orbital parameters.
+
+        Args:
+            rdm1 (np.array): One-electron reduced density matrix.
+            rdm2 (np.array): Two-electron reduced density matrix.
+            kappa_init (List, optional): Initial orbital rotation
+                parameters vector. If None, set guess as a zero vector.
+
+        Returns:
+            Tuple[List, float]: Updated orbital rotation matrix
+                and associated energy.
+        """
         def objective_function(kappa):
-            return self.get_energy_from_kappa(kappa, one_rdm, two_rdm)
+            return self.get_energy_from_kappa(kappa, rdm1, rdm2)
 
         def gradient(kappa):
-            return self.get_analytic_gradients(kappa, one_rdm, two_rdm)
+            return self.get_analytic_gradients(kappa, rdm1, rdm2)
+
+        def hessian(kappa):
+            return self.get_analytic_hessian(kappa, rdm1, rdm2)
 
         if kappa_init is None:
             kappa_init = [0.0] * self.n_kappa
 
-        # perform the optimization
-        result = minimize(objective_function, kappa_init, method='SLSQP', jac=gradient)
+        # perform a Newton-Raphson step
+        grad = gradient(kappa_init)
+        hess = hessian(kappa_init)
+        delta_kappa = -np.linalg.solve(hess, grad)
 
-        # check for any error
-        if not result.success:
-            msg = result.message
-            raise RuntimeError(f"Orbital optimization failed. {msg}.")
+        # update the value of the rotation parameters
+        kappa_optimized = kappa_init + delta_kappa
 
-        # optimized kappa
-        kappa_optimized = result.x
+        return kappa_optimized.tolist(), objective_function(kappa_optimized)
 
-        return kappa_optimized, objective_function(kappa_optimized)
+    def get_analytic_hessian(
+            self,
+            kappa: List,
+            rdm1: np.ndarray,
+            rdm2: np.ndarray
+    ) -> np.ndarray:
+        """Calculate the analytic hessian for orbital optimization.
+
+        This method calculates the second derivative of the energy
+        with respect to orbital rotation parameters.
+
+        Args:
+            kappa (List): Orbital rotation parameters vector.
+            rdm1 (np.array): One-electron reduced density matrix.
+            rdm2 (np.array): Two-electron reduced density matrix.
+
+        Returns:
+            np.array: A (n_kappa, n_kappa) matrix containing analytic hessian.
+
+        Notes:
+            Based on the method outlined in:
+            [1]. https://iopscience.iop.org/article/10.1088/2058-9565/abd334
+            [2]. https://doi.org/10.1038/s41534-023-00730-8
+            [3]. https://github.com/Emieeel/auto_oo
+        """
+        # get transformed MO coefficients
+        mo_coeff_a, mo_coeff_b = self.get_transformed_mos(kappa)
+
+        # calculate full-space one- and two-electron integrals
+        (_, one_electron_integrals,
+         two_electron_integrals) = self._get_full_space_integrals(
+             mo_coeff_a, mo_coeff_b
+        )
+
+        # get fock matrix
+        _, _, fock_matrix = self.get_fock_matrix(
+            one_electron_integrals[0],
+            two_electron_integrals[0],
+            rdm1, rdm2
+        )
+        fock_general_symm = fock_matrix + np.transpose(fock_matrix)
+
+        # convert two-electron integrals to chemistry notation
+        int2e_mo = to_chemist_ordering(two_electron_integrals[0])
+        int1e_mo = one_electron_integrals[0]
+
+        # prepare rdms
+        one_rdm = rdm1.real
+        two_rdm = rdm2.real
+
+        # get full rdms
+        one_full = np.zeros((self.nao, self.nao))
+        two_full = np.zeros((self.nao, self.nao, self.nao, self.nao))
+
+        one_full[self.occ_idx, self.occ_idx] = 2 * \
+            np.ones(len(self.occ_idx))
+        one_full[np.ix_(self.act_idx, self.act_idx)] = one_rdm
+
+        two_full[np.ix_(*[self.occ_idx]*4)] = 4 * np.einsum(
+            'ij,kl->ijkl', *[np.eye(len(self.occ_idx))]*2) - 2 * np.einsum(
+            'il,jk->ijkl', *[np.eye(len(self.occ_idx))]*2)
+        two_full[np.ix_(self.occ_idx, self.occ_idx,
+                        self.act_idx, self.act_idx)] = 2 * np.einsum(
+            'wv,ij->ijwv', one_rdm, np.eye(len(self.occ_idx)))
+        two_full[np.ix_(self.act_idx, self.act_idx,
+                        self.occ_idx, self.occ_idx)] = 2 * np.einsum(
+            'wv,ij->wvij', one_rdm, np.eye(len(self.occ_idx)))
+        two_full[np.ix_(self.occ_idx, self.act_idx,
+                        self.act_idx, self.occ_idx)] = -np.einsum(
+            'wv,ij->iwvj', one_rdm, np.eye(len(self.occ_idx)))
+        two_full[np.ix_(self.act_idx, self.occ_idx,
+                        self.occ_idx, self.act_idx)] = -np.einsum(
+            'wv,ij->vjiw', one_rdm, np.eye(len(self.occ_idx)))
+        two_full[np.ix_(*[self.act_idx]*4)] = two_rdm
+
+        # get Y matrix
+        y0 = np.einsum('pmrn, qmns->pqrs', two_full, int2e_mo)
+        y1 = np.einsum('pmnr, qmns->pqrs', two_full, int2e_mo)
+        y2 = np.einsum('prmn, qsmn->pqrs', two_full, int2e_mo)
+        y_matrix = y0 + y1 + y2
+
+        hess0 = 2 * np.einsum('pr, qs->pqrs', one_full, int1e_mo)
+        hess1 = - np.einsum(
+            'pr, qs->pqrs', fock_general_symm, np.eye(self.nao)
+        )
+        hess2 = 2 * y_matrix
+
+        hess_permuted0 = hess0 + hess1 + hess2
+        hess_permuted1 = np.transpose(hess_permuted0, (0, 1, 3, 2))
+        hess_permuted2 = np.transpose(hess_permuted0, (1, 0, 2, 3))
+        hess_permuted3 = np.transpose(hess_permuted0, (1, 0, 3, 2))
+
+        full_hess = (
+            hess_permuted0 -
+            hess_permuted1 -
+            hess_permuted2 +
+            hess_permuted3
+        )
+
+        # convert full hessian to a reduced matrix
+        # based on its lower triangular part
+        hess = self._full_hessian_to_matrix(full_hess)
+
+        # perform regularization to ensure all hessian eigenvalues are > 0
+        eigen_val, _ = np.linalg.eigh(hess)
+        fac = abs(eigen_val[0])*2 if eigen_val[0] < 0 else 0
+        return hess + np.eye(self.n_kappa)*fac
 
     def get_analytic_gradients(
             self,
@@ -214,11 +336,8 @@ class OrbitalOptimization():
             np.array: A vector of len(kappa) containing analytic gradients.
 
         Notes:
-            Based on the method outlined in
-            [1] P. E. M. Siegbahn, J. Almlof, A. Heiberg, and B. O. Roos
-            "The complete active space SCF (CASSCF) method in a Newton-Raphson
-            formulation with application to the HNO molecule"
-            J. Chem. Phys. 74, 2384-2396 (1981)
+            Based on the method outlined in:
+            [4]. https://doi.org/10.1063/1.441359
         """
         # get transformed MO coefficients
         mo_coeff_a, mo_coeff_b = self.get_transformed_mos(kappa)
@@ -230,14 +349,14 @@ class OrbitalOptimization():
         )
 
         # calculate fock matrix
-        fock_matrix = self.get_fock_matrix(
+        _, _, fock_matrix = self.get_fock_matrix(
             one_electron_integrals[0],
             two_electron_integrals[0],
             rdm1, rdm2
         )
 
         # calculate the analytic gradients
-        # eq.(10) of [1]
+        # eq.(10) of [4]
         gradient = 2 * (fock_matrix - np.transpose(fock_matrix))
 
         # convert the gradient skew-symmetric matrix to a vector
@@ -249,7 +368,7 @@ class OrbitalOptimization():
             two_electron_integrals: np.array,
             rdm1: np.array,
             rdm2: np.array
-    ):
+    ) -> np.ndarray:
         """
         Constructs the Fock matrix for orbital optimization.
 
@@ -263,11 +382,8 @@ class OrbitalOptimization():
             np.array: The Fock matrix.
 
         Notes:
-            Based on the method outlined in
-            [1] P. E. M. Siegbahn, J. Almlof, A. Heiberg, and B. O. Roos
-            "The complete active space SCF (CASSCF) method in a Newton-Raphson
-            formulation with application to the HNO molecule"
-            J. Chem. Phys. 74, 2384-2396 (1981)
+            Based on the method outlined in:
+            [4]. https://doi.org/10.1063/1.441359
         """
         # convert two-electron integrals to chemistry notation
         two_electron_integrals = to_chemist_ordering(two_electron_integrals)
@@ -284,7 +400,7 @@ class OrbitalOptimization():
         # initiate fock matrix
         fock_matrix = np.zeros((n_mos, n_mos))
 
-        # calculate the inactive part; eq.(15a) of [1]
+        # calculate the inactive part; eq.(15a) of [4]
         f_inactive = one_electron_integrals.copy()
         f_inactive_two_e_term_1 = 2 * np.einsum(
             "ijkk->ij", two_electron_integrals[np.ix_(f, f, oc, oc)]
@@ -294,7 +410,7 @@ class OrbitalOptimization():
         )
         f_inactive += (f_inactive_two_e_term_1 - f_inactive_two_e_term_2)
 
-        # calculate the active part; eq.(15b) of [1]
+        # calculate the active part; eq.(15b) of [4]
         f_active_term_1 = np.einsum(
             "tu,pqtu->pq", d_rdm1, two_electron_integrals[np.ix_(f, f, ac, ac)]
         )
@@ -316,13 +432,13 @@ class OrbitalOptimization():
         )
         fock_matrix[np.ix_(ac, f)] += (f_act_term1 + f_act_term2)
 
-        return fock_matrix
+        return f_inactive, f_active, fock_matrix
 
     def get_energy_from_kappa(
             self,
             kappa: List,
-            one_rdm: np.ndarray,
-            two_rdm: np.ndarray
+            rdm1: np.ndarray,
+            rdm2: np.ndarray
     ) -> float:
         """Gets total energy after transforming the MOs with kappa.
 
@@ -336,15 +452,15 @@ class OrbitalOptimization():
         """
         mo_coeff_a, mo_coeff_b = self.get_transformed_mos(kappa)
         return self.get_energy_from_mo_coeffs(
-            mo_coeff_a, mo_coeff_b, one_rdm, two_rdm
+            mo_coeff_a, mo_coeff_b, rdm1, rdm2
         )
 
     def get_energy_from_mo_coeffs(
             self,
             mo_coeff_a: np.ndarray,
             mo_coeff_b: Optional[np.ndarray],
-            one_rdm: np.ndarray,
-            two_rdm: np.ndarray
+            rdm1: np.ndarray,
+            rdm2: np.ndarray
     ) -> float:
         """Get energy given one- and two-particle reduced density matrices.
 
@@ -367,8 +483,8 @@ class OrbitalOptimization():
         # for restricted cases only?
         return sum(
             (core_energy,
-             np.einsum("pq, pq", one_electron_integrals[0], one_rdm),
-             0.5 * np.einsum("pqrs, pqrs", two_electron_integrals[0], two_rdm))
+             np.einsum("pq, pq", one_electron_integrals[0], rdm1),
+             0.5 * np.einsum("pqrs, pqrs", two_electron_integrals[0], rdm2))
         ).real
 
     def get_transformed_mos(self, kappa: List) -> Tuple[
@@ -417,6 +533,14 @@ class OrbitalOptimization():
         """Generate orbital rotation parameters from a skew-symmetric matrix"""
         kappa_total_vector = skew_symmetric_to_vector(kappa_matrix)
         return kappa_total_vector[self.params_idx]
+
+    def _full_hessian_to_matrix(self, full_hess):
+        """Convert the full Hessian to a matrix with only non-red. indices."""
+        tril_indices = np.tril_indices(self.nao, k=-1)
+        partial_hess = full_hess[tril_indices[0], tril_indices[1], :, :]
+        reduced_hess = partial_hess[:, tril_indices[0], tril_indices[1]]
+        nonred_hess = reduced_hess[self.params_idx, :][:, self.params_idx]
+        return nonred_hess
 
     def _get_mo_coeffs(self) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Extracts molecular orbital coefficients."""

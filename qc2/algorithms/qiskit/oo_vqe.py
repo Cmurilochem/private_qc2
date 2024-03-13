@@ -8,7 +8,26 @@ from qc2.algorithms.utils import OrbitalOptimization
 
 
 class oo_VQE(VQE):
-    """Main class for VQE."""
+    """Main class for orbital-optimized VQE.
+
+    This class extends the VQE class to include orbital optimization. It
+    supports customized ansatzes, active space definitions, qubit mapping
+    strategies, estimation methods, and optimization routines. Orbital 
+    optimization is performed alongside VQE parameter optimization.
+
+    Attributes:
+        freeze_active (bool): If True, freezes the active
+            space during optimization.
+        orbital_params (Any): Initial parameters for orbital optimization.
+        circuit_params (Any): Parameters for the VQE circuit,
+            inherited from VQE class.
+        oo_problem (Any): The orbital optimization problem definition,
+            initially None.
+        max_iterations (int): Maximum number of iterations for the optimizer.
+        conv_tol (float): Convergence tolerance for the optimization.
+        verbose (int): Verbosity level.
+        result (Any): Stores the result of the VQE computation, initially None.
+    """
     def __init__(
         self,
         qc2data=None,
@@ -22,10 +41,28 @@ class oo_VQE(VQE):
         init_orbital_params=None,
         freeze_active=False,
         max_iterations=50,
-        conv_tol=1e-10,
+        conv_tol=1e-7,
         verbose=0
     ):
-        """Initiate the class."""
+        """Initializes the oo-VQE class.
+
+        Args:
+            qc2data (Any): An instance of :class:`~qc2.data.qc2Data`.
+            ansatz (Any): The ansatz for the VQE algorithm.
+            active_space (Any): Definition of the active space.
+            mapper (Any): Strategy for fermionic-to-qubit mapping.
+            estimator (Any): Method for estimating the expectation value.
+            optimizer (Any): Optimization routine for variational parameters.
+            reference_state (Any): Reference state for the VQE algorithm.
+            init_circuit_params (Any): Initial parameters for the VQE circuit.
+            init_orbital_params (Any): Initial parameters for the
+                orbital optimization part.
+            freeze_active (bool): If True, active space is frozen
+                during orbital optimization.
+            max_iterations (int): Maximum number of iterations in optimization.
+            conv_tol (float): Convergence tolerance for optimization.
+            verbose (int): Level of verbosity.
+        """
         super().__init__(
             qc2data,
             ansatz,
@@ -142,7 +179,10 @@ class oo_VQE(VQE):
     ) -> Tuple[List, float]:
         """Get total energy and best circuit parameters for a given kappa."""
         def objective_function(theta):
-            core_energy, qubit_op = self.oo_problem.get_transformed_qubit_hamiltonian(kappa)
+            (core_energy,
+             qubit_op) = self.oo_problem.get_transformed_qubit_hamiltonian(
+                 kappa
+             )
             job = self.estimator.run(self.ansatz, qubit_op, theta)
             cost = job.result().values + core_energy
             return cost
