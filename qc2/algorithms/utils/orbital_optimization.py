@@ -312,7 +312,7 @@ class OrbitalOptimization():
 
         # perform regularization to ensure all hessian eigenvalues are > 0
         eigen_val, _ = np.linalg.eigh(hess)
-        fac = abs(eigen_val[0])*2 if eigen_val[0] < 0 else 0
+        fac = abs(eigen_val[0]) * 2 if eigen_val[0] < 0 else 0
         return hess + np.eye(self.n_kappa)*fac
 
     def get_analytic_gradients(
