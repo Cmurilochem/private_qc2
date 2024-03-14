@@ -37,4 +37,7 @@ qc2data.algorithm = VQE(
 )
 
 # run the calc
-result = qc2data.algorithm.run()
+result = qc2data.algorithm.run(
+    device_kwargs={"shots": None},
+    qnode_kwargs={"diff_method": "backprop"}
+)
