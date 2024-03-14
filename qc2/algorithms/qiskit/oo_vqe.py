@@ -12,7 +12,7 @@ class oo_VQE(VQE):
 
     This class extends the VQE class to include orbital optimization. It
     supports customized ansatzes, active space definitions, qubit mapping
-    strategies, estimation methods, and optimization routines. Orbital 
+    strategies, estimation methods, and optimization routines. Orbital
     optimization is performed alongside VQE parameter optimization.
 
     Attributes:
@@ -26,7 +26,7 @@ class oo_VQE(VQE):
         max_iterations (int): Maximum number of iterations for the optimizer.
         conv_tol (float): Convergence tolerance for the optimization.
         verbose (int): Verbosity level.
-        result (Any): Stores the result of the VQE computation, initially None.
+        energy (Any): Stores the result of the VQE computation, initially None.
     """
     def __init__(
         self,
@@ -71,7 +71,8 @@ class oo_VQE(VQE):
             estimator,
             optimizer,
             reference_state,
-            init_circuit_params
+            init_circuit_params,
+            verbose
         )
         self.freeze_active = freeze_active
         self.orbital_params = init_orbital_params
@@ -79,8 +80,6 @@ class oo_VQE(VQE):
         self.oo_problem = None
         self.max_iterations = max_iterations
         self.conv_tol = conv_tol
-        self.verbose = verbose
-        self.result = None
 
     def _get_rdms(
             self,
@@ -224,7 +223,7 @@ class oo_VQE(VQE):
         # get initial energy from initial circuit params
         energy_init = self._get_energy_from_parameters(theta, kappa)
         if self.verbose is not None:
-            print(f"iter = 000, energy = {energy_init:.12f}")
+            print(f"iter = 000, energy = {energy_init:.12f} Ha")
             energy_l.append(energy_init)
 
         for n in range(self.max_iterations):
@@ -243,18 +242,25 @@ class oo_VQE(VQE):
             energy_l.append(energy)
 
             if self.verbose is not None:
-                print(f"iter = {n+1:03}, energy = {energy:.12f}")
+                print(f"iter = {n+1:03}, energy = {energy:.12f} Ha")
             if n > 1:
                 if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
                     # save final parameters
                     self.circuit_params = theta_l[-1]
                     self.orbital_params = kappa_l[-1]
-                    self.result = energy_l[-1]
+                    self.energy = energy_l[-1]
                     if self.verbose is not None:
                         print("optimization finished.\n")
                         print("=== QISKIT oo-VQE RESULTS ===")
                         print("* Total ground state "
-                              f"energy (Hartree): {self.result:.12f}")
+                              f"energy (Hartree): {self.energy:.12f}")
                     break
+        # in case of non-convergence
+        else:
+            raise RuntimeError(
+                "Optimization did not converge within the maximum iterations."
+                " Consider increasing 'max_iterations' attribute or"
+                " setting a different 'optimizer'."
+            )
 
         return energy_l, theta_l, kappa_l
