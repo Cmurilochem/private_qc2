@@ -6,7 +6,6 @@ import numpy as np
 from ase import Atoms
 from ase.units import Ha
 
-
 from qiskit.quantum_info import SparsePauliOp
 
 from qiskit_nature.second_q.formats.qcschema import QCSchema
