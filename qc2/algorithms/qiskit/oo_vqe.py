@@ -1,4 +1,4 @@
-""""Module defining oo VQE algorithm."""
+""""Module defining oo VQE algorithm for Qiskit-Nature."""
 from typing import List, Tuple
 import itertools as itt
 import numpy as np
@@ -8,7 +8,7 @@ from qc2.algorithms.utils import OrbitalOptimization
 
 
 class oo_VQE(VQE):
-    """Main class for orbital-optimized VQE.
+    """Main class for orbital-optimized VQE with Qiskit-Nature.
 
     This class extends the VQE class to include orbital optimization. It
     supports customized ansatzes, active space definitions, qubit mapping
@@ -18,15 +18,15 @@ class oo_VQE(VQE):
     Attributes:
         freeze_active (bool): If True, freezes the active
             space during optimization.
-        orbital_params (Any): Initial parameters for orbital optimization.
-        circuit_params (Any): Parameters for the VQE circuit,
+        orbital_params (List): Initial parameters for orbital optimization.
+        circuit_params (List): Parameters for the VQE circuit,
             inherited from VQE class.
-        oo_problem (Any): The orbital optimization problem definition,
+        oo_problem (OrbitalOptimization): The orbital optimization problem definition,
             initially None.
         max_iterations (int): Maximum number of iterations for the optimizer.
         conv_tol (float): Convergence tolerance for the optimization.
         verbose (int): Verbosity level.
-        energy (Any): Stores the result of the VQE computation, initially None.
+        energy (float): Stores the result of the VQE computation, initially None.
     """
     def __init__(
         self,
