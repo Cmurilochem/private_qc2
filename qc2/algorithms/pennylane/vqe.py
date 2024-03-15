@@ -184,7 +184,6 @@ class VQE(VQEBASE):
             if self.verbose is not None:
                 if n % 2 == 0:
                     print(f"iter = {n:03}, energy = {energy_l[-1]:.12f} Ha")
-                    print(type(theta_l[-1]), type(energy_l[-1]))
 
             if n > 1:
                 if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
