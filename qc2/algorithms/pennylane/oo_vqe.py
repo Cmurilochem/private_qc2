@@ -77,15 +77,19 @@ class oo_VQE(VQE):
         self.freeze_active = freeze_active
         self.orbital_params = init_orbital_params
         self.circuit_params = self.params
-        #self.oo_problem = None
-        # instantiate oo class
-        self.oo_problem = OrbitalOptimization(
-            self.qc2data,
-            self.active_space,
-            self.freeze_active,
-            self.mapper,
-            "pennylane"
-        )
+        self.oo_problem = None
+
+    @staticmethod
+    def _get_default_init_orbital_params(n_kappa: List) -> List:
+        """Set up the init orbital rotation parameters.
+
+        Args:
+            n_kappa (List): number of orbital rotation parameters.
+
+        Returns:
+            List : List of params values
+        """
+        return [0.0] * n_kappa
 
     def _get_rdms(
             self,
@@ -135,7 +139,8 @@ class oo_VQE(VQE):
             )
 
             # convert qiskit SparsePauliOp to pennylane Operator
-            qubit_ham_temp = qml.from_qiskit_op(qubit_ham_temp_qiskit)
+            coefficients, operators = _qiskit_nature_to_pennylane(qubit_ham_temp_qiskit)
+            qubit_ham_temp = sum(c * op for c, op in zip(coefficients, operators))
 
             # calculate expectation values
             circuit = VQE._build_circuit(
@@ -152,20 +157,23 @@ class oo_VQE(VQE):
             elif length == 4:
                 rdm2_spin[iele, lele, jele, kele] = energy_temp
 
-            if sum_spin:
-                # get spin-free RDMs
-                rdm1_np = np.zeros((n_mol_orbitals,) * 2, dtype=np.complex128)
-                rdm2_np = np.zeros((n_mol_orbitals,) * 4, dtype=np.complex128)
+        if sum_spin:
+            # get spin-free RDMs
+            rdm1_np = np.zeros((n_mol_orbitals,) * 2, dtype=np.complex128)
+            rdm2_np = np.zeros((n_mol_orbitals,) * 4, dtype=np.complex128)
 
-                # construct spin-summed 1-RDM
-                for i, j in itt.product(range(n_spin_orbitals), repeat=2):
-                    rdm1_np[i//2, j//2] += rdm1_spin[i, j]
+            # construct spin-summed 1-RDM
+            mod = n_spin_orbitals // 2
+            for i, j in itt.product(range(n_spin_orbitals), repeat=2):
+                rdm1_np[i % mod, j % mod] += rdm1_spin[i, j]
 
-                # construct spin-summed 2-RDM
-                for i, j, k, l in itt.product(range(n_spin_orbitals), repeat=4):
-                    rdm2_np[i//2, j//2, k//2, l//2] += rdm2_spin[i, j, k, l]
+            # construct spin-summed 2-RDM
+            for i, j, k, l in itt.product(range(n_spin_orbitals), repeat=4):
+                rdm2_np[
+                    i % mod, j % mod, k % mod, l % mod
+                ] += rdm2_spin[i, j, k, l]
 
-                return rdm1_np, rdm2_np
+            return rdm1_np, rdm2_np
 
         return rdm1_spin, rdm2_spin
 
@@ -209,10 +217,8 @@ class oo_VQE(VQE):
                 circuit, circ_params
             )
             energy = corr_energy + core_energy
-            energy_l.append(energy.numpy())
-            theta_l.append(theta.numpy().tolist())
-
-            print(n, energy_l[-1])
+            energy_l.append(energy)
+            theta_l.append(circ_params)
 
             if n > 1:
                 if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
@@ -228,3 +234,74 @@ class oo_VQE(VQE):
             )
 
         return theta_optimized, energy_optimized
+
+    def run(self) -> Tuple[List, List, List]:
+        """Optimize both the circuit and orbital parameters."""
+        print(">>> Optimizing circuit and orbital parameters...")
+
+        # instantiate oo class
+        self.oo_problem = OrbitalOptimization(
+            self.qc2data,
+            self.active_space,
+            self.freeze_active,
+            self.mapper,
+            "pennylane"
+        )
+
+        # set initial parameters
+        self.orbital_params = (
+            self._get_default_init_orbital_params(self.oo_problem.n_kappa)
+            if self.orbital_params is None
+            else self.orbital_params
+        )
+        theta = self.circuit_params
+        kappa = self.orbital_params
+
+        theta_l = []
+        kappa_l = []
+        energy_l = []
+
+        # get initial energy from initial circuit params
+        energy_init = self._get_energy_from_parameters(theta, kappa)
+        if self.verbose is not None:
+            print(f"iter = 000, energy = {energy_init:.12f} Ha")
+            energy_l.append(energy_init)
+
+        for n in range(self.max_iterations):
+            # optimize circuit parameters with fixed kappa
+            theta, _ = self._circuit_optimization(theta, kappa)
+
+            # optimize orbital parameters with fixed theta from previous run
+            rdm1, rdm2 = self._get_rdms(theta)
+            kappa, _ = self.oo_problem.orbital_optimization(rdm1, rdm2, kappa)
+
+            # calculate final energy with all optimized parameters
+            energy = self._get_energy_from_parameters(theta, kappa)
+
+            theta_l.append(theta)
+            kappa_l.append(kappa)
+            energy_l.append(energy)
+
+            if self.verbose is not None:
+                print(f"iter = {n+1:03}, energy = {energy:.12f} Ha")
+            if n > 1:
+                if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
+                    # save final parameters
+                    self.circuit_params = theta_l[-1]
+                    self.orbital_params = kappa_l[-1]
+                    self.energy = energy_l[-1]
+                    if self.verbose is not None:
+                        print("optimization finished.\n")
+                        print("=== PENNYLANE oo-VQE RESULTS ===")
+                        print("* Total ground state "
+                              f"energy (Hartree): {self.energy:.12f}")
+                    break
+        # in case of non-convergence
+        else:
+            raise RuntimeError(
+                "Optimization did not converge within the maximum iterations."
+                " Consider increasing 'max_iterations' attribute or"
+                " setting a different 'optimizer'."
+            )
+
+        return energy_l, theta_l, kappa_l

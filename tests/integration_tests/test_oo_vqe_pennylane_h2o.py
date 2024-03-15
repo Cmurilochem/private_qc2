@@ -5,19 +5,10 @@ import pytest
 
 from ase.build import molecule
 
-from qiskit_algorithms.optimizers import SLSQP
-from qiskit.primitives import Estimator
-
+from qc2.ase import PySCF
 from qc2.data import qc2Data
-
-from qc2.algorithms.qiskit import oo_VQE
+from qc2.algorithms.pennylane import oo_VQE
 from qc2.algorithms.utils import ActiveSpace
-
-try:
-    from qc2.ase import Psi4
-except ImportError:
-    pytest.skip("Skipping ASE-Psi4 tests...",
-                allow_module_level=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -25,7 +16,7 @@ def clean_up_files():
     """Runs at the end of all tests."""
     yield
     # Define the patterns for files to delete
-    file_pattern = "*.hdf5 *.dat"
+    file_pattern = "*.hdf5"
     # Get a list of files that match the patterns
     matching_files = []
     for pattern in file_pattern.split():
@@ -47,7 +38,7 @@ def oo_vqe_calculation():
     )
 
     # set up and run calculator
-    qc2data.molecule.calc = Psi4(method='hf', basis='sto-3g')
+    qc2data.molecule.calc = PySCF()
     qc2data.run()
 
     # instantiate oo-VQE algorithm
@@ -56,8 +47,6 @@ def oo_vqe_calculation():
             num_active_electrons=(2, 2),
             num_active_spatial_orbitals=3
         ),
-        optimizer=SLSQP(),
-        estimator=Estimator()
     )
 
     # run oo-VQE

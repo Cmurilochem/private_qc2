@@ -63,7 +63,7 @@ class VQE(VQEBASE):
             else ansatz
         )
         self.params = (
-            self._get_default_init_param(self.qubits, self.electrons)
+            self._get_default_init_params(self.qubits, self.electrons)
             if init_params is None
             else init_params
         )
@@ -118,7 +118,7 @@ class VQE(VQEBASE):
         return ansatz
 
     @staticmethod
-    def _get_default_init_param(qubits: int, electrons: int) -> np.ndarray:
+    def _get_default_init_params(qubits: int, electrons: int) -> np.ndarray:
         # Generate single and double excitations
         singles, doubles = qml.qchem.excitations(electrons, qubits)
         return np.zeros(len(singles) + len(doubles))
