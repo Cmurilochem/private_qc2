@@ -38,9 +38,6 @@ qc2data.run()
 
 # set up VQE calc
 qc2data.algorithm = VQE(
-    active_space=ActiveSpace(
-        num_active_electrons=(3, 2), num_active_spatial_orbitals=5
-    ),
     optimizer=SLSQP(),
     estimator=Estimator(),
 )

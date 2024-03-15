@@ -14,11 +14,8 @@ class VQE(VQEBASE):
         self,
         qc2data=None,
         ansatz=None,
-        active_space=None,
-        mapper=None,
         estimator=None,
         optimizer=None,
-        reference_state=None,
         init_params=None,
     ):
         """Initiate the class
@@ -31,27 +28,25 @@ class VQE(VQEBASE):
 
         super().__init__(qc2data, "qiskit")
 
-        # init active space and mapper
-        self.active_space = (
-            ActiveSpace((2, 2), 2) if active_space is None else active_space
-        )
-        self.mapper = JordanWignerMapper() if mapper is None else mapper
-
-        # init circuit
+        # init qiskit solver utils
         self.estimator = Estimator() if estimator is None else estimator
         self.optimizer = SLSQP() if optimizer is None else optimizer
-        self.reference_state = (
-            self._get_default_reference(self.active_space, self.mapper)
-            if reference_state is None
-            else reference_state
-        )
-        self.ansatz = (
-            self._get_default_ansatz(
-                self.active_space, self.mapper, self.reference_state
+
+        # load the ansatz
+        if ansatz is not None:
+            self.ansatz = ansatz
+            self.mapper = ansatz.qubit_mapper
+            self.active_space = ActiveSpace(
+                ansatz.num_particles, ansatz.num_spatial_orbitals
             )
-            if ansatz is None
-            else ansatz
-        )
+
+        # or create the default one
+        else:
+            self.active_space = ActiveSpace((1, 1), 2)
+            self.mapper = JordanWignerMapper()
+            self.ansatz = self._get_default_ansatz(self.active_space, self.mapper)
+
+        # init parameters
         self.params = (
             self._get_default_init_params(self.ansatz.num_parameters)
             if init_params is None
@@ -59,34 +54,22 @@ class VQE(VQEBASE):
         )
 
     @staticmethod
-    def _get_default_reference(active_space, mapper):
-        """Set up the default reference state circuit
-
-        Args:
-            active_space (ActiveSpace): description of the active space
-            mapper (mapper): mapper class instance
-
-        Returns:
-            QuantumCircuit: hartree fock circuit
-        """
-        return HartreeFock(
-            active_space.num_active_spatial_orbitals,
-            active_space.num_active_electrons,
-            mapper,
-        )
-
-    @staticmethod
-    def _get_default_ansatz(active_space, mapper, reference_state):
+    def _get_default_ansatz(active_space, mapper):
         """Set up the default UCC ansatz from a HF reference
 
         Args:
             active_space (ActiveSpace): description of the active space
             mapper (mapper): mapper class instance
-            reference_state (QuantumCircuit): reference state circuit
 
         Returns:
             QuantumCircuit: circuit ansatz
         """
+        # reference HF state
+        reference_state = HartreeFock(
+            active_space.num_active_spatial_orbitals,
+            active_space.num_active_electrons,
+            mapper,
+        )
 
         return UCC(
             num_spatial_orbitals=active_space.num_active_spatial_orbitals,
@@ -98,7 +81,7 @@ class VQE(VQEBASE):
 
     @staticmethod
     def _get_default_init_params(nparams):
-        """Set up the init para,s
+        """Set up the init params
 
         Args:
             nparams (np.ndarray): default values

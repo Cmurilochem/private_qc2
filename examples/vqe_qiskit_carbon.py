@@ -38,11 +38,8 @@ qc2data.molecule.calc = PySCF(
 # run calculation and save qchem data in the hdf5 file
 qc2data.run()
 
-
 # set up VQE calc
-qc2data.algorithm = VQE(
-    active_space=ActiveSpace(num_active_electrons=(4, 2), num_active_spatial_orbitals=5)
-)
+qc2data.algorithm = VQE()
 
 # run the calc
 result = qc2data.algorithm.run()

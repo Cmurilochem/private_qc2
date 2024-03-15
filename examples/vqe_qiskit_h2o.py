@@ -8,13 +8,16 @@ Notes:
 
 from ase.build import molecule
 
+from qiskit.primitives import Estimator
+from qiskit_algorithms.optimizers import SLSQP
+
 import qiskit_nature
+from qiskit_nature.second_q.circuit.library import UCC
+from qiskit_nature.second_q.mappers import JordanWignerMapper
 
 from qc2.ase import PySCF
 from qc2.data import qc2Data
-
 from qc2.algorithms.qiskit import VQE
-from qc2.algorithms.utils import ActiveSpace
 
 # Avoid using the deprecated `PauliSumOp` object
 qiskit_nature.settings.use_pauli_sum_op = False
@@ -35,9 +38,10 @@ qc2data.molecule.calc = PySCF()  # default => RHF/STO-3G
 qc2data.run()
 
 # set up VQE calc
-qc2data.algorithm = VQE(
-    active_space=ActiveSpace(num_active_electrons=(2, 2), num_active_spatial_orbitals=3)
-)
+ansatz = UCC(4, (2, 2), "sd", JordanWignerMapper())
+estimator = Estimator()
+opt = SLSQP()
+qc2data.algorithm = VQE(ansatz=ansatz, estimator=estimator, optimizer=opt)
 
 # run the qc calc
 qc2data.algorithm.run()

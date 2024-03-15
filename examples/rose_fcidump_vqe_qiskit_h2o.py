@@ -9,9 +9,6 @@ Notes:
 import subprocess
 
 import qiskit_nature
-from qiskit_nature.second_q.circuit.library import HartreeFock, UCCSD
-
-
 from qc2.ase import ROSE, ROSETargetMolecule, ROSEFragment
 from qc2.data import qc2Data
 from qc2.algorithms.qiskit import VQE

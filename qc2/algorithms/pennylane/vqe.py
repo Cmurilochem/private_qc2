@@ -27,6 +27,16 @@ class VQE(VQEBASE):
         """
         super().__init__(qc2data, "pennylane")
 
+        self.optimizer = (
+            qml.GradientDescentOptimizer(stepsize=0.5)
+            if optimizer is None
+            else optimizer
+        )
+        self.mapper = JordanWignerMapper()  # Is that the only option for pennylane ?
+
+        if ansatz is not None:
+            self.ansatz = ansatz
+
         # init active space and mapper
         self.active_space = (
             ActiveSpace((2, 2), 2) if active_space is None else active_space
@@ -36,11 +46,6 @@ class VQE(VQEBASE):
         self.qubits = 2 * self.active_space.num_active_spatial_orbitals
         self.electrons = sum(self.active_space.num_active_electrons)
 
-        self.optimizer = (
-            qml.GradientDescentOptimizer(stepsize=0.5)
-            if optimizer is None
-            else optimizer
-        )
         self.reference_state = (
             self._get_default_reference(self.active_space, self.mapper)
             if reference_state is None

@@ -12,7 +12,6 @@ from qiskit.primitives import Estimator
 from qc2.data import qc2Data
 
 from qc2.algorithms.qiskit import VQE
-from qc2.algorithms.utils import ActiveSpace
 
 # Avoid using the deprecated `PauliSumOp` object
 qiskit_nature.settings.use_pauli_sum_op = False
@@ -27,15 +26,8 @@ if not os.path.exists(hdf5_file):
 # init the hdf5 file
 qc2data = qc2Data(hdf5_file, schema="qcschema")
 
-# define activate space
-n_active_electrons = (1, 1)  # => (n_alpha, n_beta)
-n_active_spatial_orbitals = 2
-
 # set up VQE calc
 qc2data.algorithm = VQE(
-    active_space=ActiveSpace(
-        num_active_electrons=(1, 1), num_active_spatial_orbitals=2
-    ),
     optimizer=SLSQP(),
     estimator=Estimator(),
 )
