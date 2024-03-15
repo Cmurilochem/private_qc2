@@ -1,11 +1,11 @@
 """This module defines the main qc2 data class."""
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 import os
+import numpy as np
 
 from ase import Atoms
 from ase.units import Ha
 
-import qiskit_nature
 from qiskit.quantum_info import SparsePauliOp
 
 from qiskit_nature.second_q.formats.qcschema import QCSchema
@@ -17,12 +17,14 @@ from qiskit_nature.second_q.operators import FermionicOp
 from qiskit_nature.second_q.problems import ElectronicStructureProblem
 from qiskit_nature.second_q.hamiltonians import ElectronicEnergy
 from qiskit_nature.second_q.transformers import ActiveSpaceTransformer
+from qiskit_nature.second_q.transformers import BasisTransformer
+from qiskit_nature.second_q.problems import ElectronicBasis
+from qiskit_nature.second_q.operators import ElectronicIntegrals
 
 from pennylane.operation import Operator
 from qc2.pennylane.convert import import_operator
-
-# avoid using the deprecated `PauliSumOp` object
-qiskit_nature.settings.use_pauli_sum_op = False
+from qc2.algorithms.base import BaseAlgorithm
+from qc2.ase.qc2_ase_base_class import BaseQc2ASECalculator
 
 
 class qc2Data:
@@ -42,12 +44,14 @@ class qc2Data:
         _molecule (Atoms): Attribute representing the
             molecular structure as an ASE :class:`ase.atoms.Atoms` instance.
     """
+
     def __init__(
-            self,
-            filename: str,
-            molecule: Atoms = Atoms(),
-            *,
-            schema: str = 'qcschema'
+        self,
+        filename: str,
+        molecule: Atoms = Atoms(),
+        algorithm: BaseAlgorithm = BaseAlgorithm(),
+        *,
+        schema: str = "qcschema",
     ):
         """Initializes the ``qc2Data`` class instance.
 
@@ -81,6 +85,9 @@ class qc2Data:
         self._molecule = None
         self.molecule = molecule
 
+        self._algorithm = None
+        self.algorithm = algorithm
+
     @property
     def molecule(self) -> Atoms:
         """Returs the molecule attribute.
@@ -95,21 +102,34 @@ class qc2Data:
         """Sets the molecule attribute."""
         self._molecule = Atoms(*args, **kwargs)
 
+    @property
+    def algorithm(self) -> BaseAlgorithm:
+        """Returns the algo"""
+        return self._algorithm
+
+    @algorithm.setter
+    def algorithm(self, algorithm: BaseAlgorithm) -> None:
+        """set the algo"""
+        self._algorithm = algorithm
+        if hasattr(algorithm, "set_qc2data"):
+            algorithm.set_qc2data(self)
+        else:
+            raise ValueError("{} can't set qc2data".format(algorithm.__name__))
+
     def _check_filename_extension(self) -> None:
         """Ensures that files have proper extensions."""
         # get file extension
         file_extension = os.path.splitext(self._filename)[1]
 
         # check extension
-        if (self._schema == 'qcschema'
-                and file_extension not in ['.hdf5', '.h5']):
+        if self._schema == "qcschema" and file_extension not in [".hdf5", ".h5"]:
             raise ValueError(
                 f"{file_extension} is not a valid extension. "
                 "For QCSchema format provide a file with "
                 "*.hdf5 or *.h5 extensions."
             )
 
-        if (self._schema == 'fcidump' and not file_extension == '.fcidump'):
+        if self._schema == "fcidump" and not file_extension == ".fcidump":
             raise ValueError(
                 f"{file_extension} is not a valid extension. "
                 "For FCIDump format provide a file with "
@@ -148,7 +168,7 @@ class qc2Data:
             )
 
         # run ase calculator
-        reference_energy = self._molecule.get_potential_energy()/Ha
+        reference_energy = self._molecule.get_potential_energy() / Ha
         print(f"* Reference energy (Hartree): {reference_energy}")
 
         # dump required data to the hdf5 or fcidump file
@@ -190,11 +210,17 @@ class qc2Data:
         >>> qc2data.run()
         >>> fcidump = qc2data.read_schema()
         """
+        # create a generic calculator
+        self._molecule.calc = BaseQc2ASECalculator()
+
         # read required data from the hdf5 or fcidump file
         self._molecule.calc.schema_format = self._schema
         return self._molecule.calc.load(self._filename)
 
-    def process_schema(self) -> ElectronicStructureProblem:
+    def process_schema(
+            self,
+            basis: ElectronicBasis = ElectronicBasis.MO
+    ) -> ElectronicStructureProblem:
         """Creates an instance of :class:`ElectronicStructureProblem`.
 
         Reads data using the :meth:`~.read_schema` method and converts it into
@@ -239,19 +265,21 @@ class qc2Data:
         # dataclass instances
         schema = self.read_schema()
 
-        if self._schema == 'fcidump':
+        if self._schema == "fcidump":
             # convert `FCIDump` into `ElectronicStructureProblem`;
             # see qiskit_nature/second_q/formats/fcidump_translator.py
             return fcidump_to_problem(schema)
 
         # convert `QCSchema` into `ElectronicStructureProblem`;
         # see qiskit_nature/second_q/formats/qcschema_translator.py
-        return qcschema_to_problem(schema, include_dipole=False)
+        return qcschema_to_problem(schema, include_dipole=False, basis=basis)
 
     def get_active_space_hamiltonian(
             self,
             num_electrons: Union[int, Tuple[int, int]],
-            num_spatial_orbitals: int
+            num_spatial_orbitals: int,
+            *,
+            initial_es_problem: Optional[ElectronicStructureProblem] = None,
     ) -> Tuple[ElectronicStructureProblem, float, ElectronicEnergy]:
         """Builds the active-space reduced Hamiltonian.
 
@@ -260,11 +288,14 @@ class qc2Data:
                 electrons. If a tuple is provided, it represents alpha and
                 beta active electrons.
             num_spatial_orbitals (int): The number of spatial orbitals.
+            initial_es_problem (Optional[ElectronicStructureProblem]):
+                  An instance of :class:`ElectronicStructureProblem`.
+                  If None, it is instantiated internally. Defaults to None.
 
         Returns:
             Tuple[ElectronicStructureProblem, float, ElectronicEnergy]:
-                - es_problem (ElectronicStructureProblem): An instance of the
-                  :class:`ElectronicStructureProblem`.
+                - active_space_es_problem (ElectronicStructureProblem): final
+                  active space transformed :class:`ElectronicStructureProblem`.
                 - core_energy (float): The core energy, which includes the
                   nuclear repulsion energy and the energy of inactive orbitals.
                 - active_space_hamiltonian (ElectronicEnergy):
@@ -295,8 +326,11 @@ class qc2Data:
         ...     n_electrons, n_spatial_orbitals
         ... )
         """
-        # instantiate `ElectronicStructureProblem`
-        es_problem = self.process_schema()
+        if initial_es_problem is None:
+            # instantiate `ElectronicStructureProblem`
+            es_problem = self.process_schema()
+        else:
+            es_problem = initial_es_problem
 
         # convert `ElectronicStructureProblem` into an instance of
         # `ElectronicEnergy` hamiltonian in second quantization;
@@ -306,37 +340,129 @@ class qc2Data:
         # in case of space selection, reduce the space extent of the
         # fermionic Hamiltonian based on the number of active electrons
         # and orbitals
-        transformer = ActiveSpaceTransformer(num_electrons,
-                                             num_spatial_orbitals)
+        transformer = ActiveSpaceTransformer(
+            num_electrons, num_spatial_orbitals
+        )
 
-        transformer.prepare_active_space(es_problem.num_particles,
-                                         es_problem.num_spatial_orbitals)
+        transformer.prepare_active_space(
+            es_problem.num_particles, es_problem.num_spatial_orbitals
+        )
 
         # after preparation, transform hamiltonian
         active_space_hamiltonian = transformer.transform_hamiltonian(
-            hamiltonian)
+            hamiltonian
+        )
 
         # just in case also generate a tranformed `ElectronicStructureProblem`
-        # active_space_es_problem = transformer.transform(es_problem)
+        active_space_es_problem = transformer.transform(es_problem)
 
         # set up core energy after transformation
         nuclear_repulsion_energy = active_space_hamiltonian.constants[
-            'nuclear_repulsion_energy']
+            "nuclear_repulsion_energy"
+        ]
         inactive_space_energy = active_space_hamiltonian.constants[
-            'ActiveSpaceTransformer']
+            "ActiveSpaceTransformer"
+        ]
         core_energy = nuclear_repulsion_energy + inactive_space_energy
 
-        return es_problem, core_energy, active_space_hamiltonian
+        return active_space_es_problem, core_energy, active_space_hamiltonian
+
+    def get_transformed_hamiltonian(
+            self,
+            initial_es_problem: ElectronicStructureProblem,
+            matrix_transform_a: np.ndarray,
+            matrix_transform_b: np.ndarray,
+            initial_basis: str = "atomic",
+            final_basis: str = "molecular",
+    ) -> Tuple[ElectronicStructureProblem, ElectronicEnergy]:
+        """Transforms the Hamiltonian from one basis set to another.
+
+        Args:
+            initial_es_problem (ElectronicStructureProblem):
+                The original electronic structure problem.
+            matrix_transform_a (np.ndarray): The transformation matrix
+                for alpha spin orbitals.
+            matrix_transform_b (np.ndarray): The transformation matrix
+                for beta spin orbitals.
+            initial_basis (str, optional): The initial basis set.
+                Defaults to ``atomic``.
+            final_basis (str, optional): The final basis set to transform to.
+                Defaults to ``molecular``.
+
+        Returns:
+            Tuple[ElectronicStructureProblem, ElectronicEnergy]:
+                - transformed_es_problem (ElectronicStructureProblem):
+                  An instance of the transformed
+                  :class:`ElectronicStructureProblem`.
+                - transformed_hamiltonian (ElectronicEnergy):
+                  An instance of :class:`ElectronicEnergy`,
+                  the transformed Hamiltonian.
+        """
+        initial_basis = ElectronicBasis(initial_basis)
+        final_basis = ElectronicBasis(final_basis)
+
+        # create an instance of `BasisTransformer`
+        transformer = BasisTransformer(
+            initial_basis,
+            final_basis,
+            ElectronicIntegrals.from_raw_integrals(
+                matrix_transform_a, h1_b=matrix_transform_b
+            )
+        )
+        # transform the original `ElectronicStructureProblem`
+        # from the original to the new basis
+        # first, collect integrals
+        alpha = initial_es_problem.hamiltonian.electronic_integrals.alpha
+        beta = initial_es_problem.hamiltonian.electronic_integrals.beta
+        beta_alpha = (
+            initial_es_problem.hamiltonian.electronic_integrals.beta_alpha
+        )
+
+        # transform initial integrals to the new basis
+        integrals_initial_basis = ElectronicIntegrals(alpha, beta, beta_alpha)
+        integrals_final_basis = transformer.transform_electronic_integrals(
+            integrals_initial_basis
+        )
+        # build up the new `ElectronicEnergy` hamiltonian
+        transformed_hamiltonian = ElectronicEnergy(integrals_final_basis)
+        nuc_rep_energy = (
+            initial_es_problem.hamiltonian.nuclear_repulsion_energy
+        )
+        transformed_hamiltonian.nuclear_repulsion_energy = nuc_rep_energy
+
+        # build up the new `ElectronicStructureProblem`
+        transformed_es_problem = ElectronicStructureProblem(
+            transformed_hamiltonian
+        )
+        transformed_es_problem.basis = final_basis
+        transformed_es_problem.molecule = initial_es_problem.molecule
+        transformed_es_problem.reference_energy = (
+            initial_es_problem.reference_energy
+        )
+        transformed_es_problem.num_particles = initial_es_problem.num_particles
+        transformed_es_problem.num_spatial_orbitals = (
+            initial_es_problem.num_spatial_orbitals
+        )
+
+        return transformed_es_problem, transformed_hamiltonian
 
     def get_fermionic_hamiltonian(
             self,
             num_electrons: Union[int, Tuple[int, int]],
-            num_spatial_orbitals: int
+            num_spatial_orbitals: int,
+            *,
+            transform: bool = False,
+            initial_es_problem: Optional[ElectronicStructureProblem] = None,
+            matrix_transform_a: Optional[np.ndarray] = None,
+            matrix_transform_b: Optional[np.ndarray] = None,
+            initial_basis: str = "atomic",
+            final_basis: str = "molecular",
     ) -> Tuple[ElectronicStructureProblem, float, FermionicOp]:
         """Builds the fermionic Hamiltonian of a target molecule.
 
         This method constructs the electronic Hamiltonian in 2nd-quantization
-        based on the provided parameters.
+        based on the provided parameters. It can optionally perform a basis set
+        transformation if the `transform` flag is set to True.
 
         Args:
             num_electrons (Union[int, Tuple[int, int]]):
@@ -347,6 +473,21 @@ class qc2Data:
                 that the number of alpha and beta electrons equals half of
                 this value, respectively.
             num_spatial_orbitals (int): The number of active orbitals.
+            transform (bool, optional): If True, performs a basis
+                transformation. Defaults to False.
+            initial_es_problem (ElectronicStructureProblem, optional):
+                The initial electronic structure problem.
+                Required if `transform` is True. Defaults to None.
+            matrix_transform_a (np.ndarray, optional): Transformation
+                matrix for alpha spin orbitals. Required if `transform`
+                is True. Defaults to None.
+            matrix_transform_b (np.ndarray, optional): Transformation
+                matrix for beta spin orbitals. Required if `transform`
+                is True. Defaults to None.
+            initial_basis (str, optional): The initial basis set. Defaults to
+                "atomic".
+            final_basis (str, optional): The final basis set to transform to.
+                Defaults to "molecular".
 
         Returns:
             Tuple[float, ElectronicStructureProblem, FermionicOp]:
@@ -387,17 +528,32 @@ class qc2Data:
         if num_electrons is None:
             raise ValueError(
                 "Number of active electrons cannot be 'None'."
-                "Please, set the attribute 'num_electrons'.")
+                "Please, set the attribute 'num_electrons'."
+            )
 
         if num_spatial_orbitals is None:
             raise ValueError(
                 "Number of active orbitals cannot be 'None'."
-                "Please, set the attribute 'num_spatial_orbitals'.")
+                "Please, set the attribute 'num_spatial_orbitals'."
+            )
+
+        transformed_es_problem = None
+        if transform is True and initial_es_problem is not None:
+            # Transform `ElectronicStructureProblem` to a new basis
+            transformed_es_problem, _ = self.get_transformed_hamiltonian(
+                initial_es_problem,
+                matrix_transform_a,
+                matrix_transform_b,
+                initial_basis,
+                final_basis
+            )
 
         # calculate active space `ElectronicEnergy` hamiltonian
         (es_problem, core_energy,
          reduced_hamiltonian) = self.get_active_space_hamiltonian(
-             num_electrons, num_spatial_orbitals
+             num_electrons,
+             num_spatial_orbitals,
+             initial_es_problem=transformed_es_problem
          )
 
         # now convert the reduced Hamiltonian (`Hamiltonian` instance)
@@ -414,12 +570,19 @@ class qc2Data:
             num_spatial_orbitals: int,
             mapper: QubitMapper = JordanWignerMapper(),
             *,
-            format: str = "qiskit"
+            format: str = "qiskit",
+            transform: bool = False,
+            initial_es_problem: Optional[ElectronicStructureProblem] = None,
+            matrix_transform_a: Optional[np.ndarray] = None,
+            matrix_transform_b: Optional[np.ndarray] = None,
+            initial_basis: str = "atomic",
+            final_basis: str = "molecular",
     ) -> Tuple[float, Union[SparsePauliOp, Operator]]:
         """Generates the qubit Hamiltonian of a target molecule.
 
         This method generates the qubit Hamiltonian representation of a target
-        molecule, which is essential for quantum algorithms related to qchem.
+        molecule. It can optionally perform a basis set transformation if the
+        `transform` flag is True.
 
         Args:
             num_electrons (Union[int, Tuple[int, int]]):
@@ -432,11 +595,26 @@ class qc2Data:
             num_spatial_orbitals (int): The number of active orbitals.
             mapper (QubitMapper, optional):
                 The qubit mapping strategy to convert fermionic operators to
-                qubit operators. Defaults to `JordanWignerMapper()`.
+                qubit operators. Defaults to ``JordanWignerMapper()``.
             format (str, optional):
                 The format in which to return the qubit Hamiltonian.
-                Supported formats are "qiskit" and "pennylane".
-                Defaults to "qiskit".
+                Supported formats are ``qiskit`` and ``pennylane``.
+                Defaults to ``qiskit``.
+            transform (bool, optional): If True, performs a basis
+                transformation. Defaults to False.
+            initial_es_problem (ElectronicStructureProblem, optional): The
+                initial electronic structure problem.
+                Required if `transform` is True. Defaults to None.
+            matrix_transform_a (np.ndarray, optional): Transformation
+                matrix for alpha spin orbitals. Required if `transform`
+                is True. Defaults to None.
+            matrix_transform_b (np.ndarray, optional): Transformation matrix
+                for beta spin orbitals. Required if `transform` is True.
+                Defaults to None.
+            initial_basis (str, optional): The initial basis set.
+                Defaults to ``atomic``.
+            final_basis (str, optional): The final basis set to transform to.
+                Defaults to ``molecular``.
 
         Returns:
             Tuple[float, Union[SparsePauliOp, Operator]]:
@@ -477,7 +655,15 @@ class qc2Data:
 
         # get fermionic hamiltonian
         _, core_energy, second_q_op = self.get_fermionic_hamiltonian(
-            num_electrons, num_spatial_orbitals)
+            num_electrons,
+            num_spatial_orbitals,
+            transform=transform,
+            initial_es_problem=initial_es_problem,
+            matrix_transform_a=matrix_transform_a,
+            matrix_transform_b=matrix_transform_b,
+            initial_basis=initial_basis,
+            final_basis=final_basis
+        )
 
         # perform fermionic-to-qubit transformation using the given mapper
         # and obtain `SparsePauliOp` qiskit qubit hamiltonian
