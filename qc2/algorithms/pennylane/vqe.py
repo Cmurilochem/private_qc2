@@ -39,6 +39,8 @@ class VQE(VQEBASE):
         # use the provided ansatz
         if ansatz is not None:
             self.ansatz = ansatz
+
+            # check if all argument for default ansatz are None
             if any(
                 param is not None
                 for param in [active_space, mapper, device, reference_state]

@@ -38,27 +38,44 @@ class VQE(VQEBASE):
 
         super().__init__(qc2data, "qiskit")
 
-        # init active space and mapper
-        self.active_space = (
-            ActiveSpace((2, 2), 2) if active_space is None else active_space
-        )
-        self.mapper = JordanWignerMapper() if mapper is None else mapper
-
-        # init circuit
         self.estimator = Estimator() if estimator is None else estimator
         self.optimizer = SLSQP() if optimizer is None else optimizer
-        self.reference_state = (
-            self._get_default_reference(self.active_space, self.mapper)
-            if reference_state is None
-            else reference_state
-        )
-        self.ansatz = (
-            self._get_default_ansatz(
+
+        # load the as ansatz
+        if ansatz is not None:
+            self.ansatz = ansatz
+            self.mapper = ansatz.qubit_mapper
+            self.active_space = ActiveSpace(
+                (ansatz.num_particles, ansatz.num_spatial_orbitals)
+            )
+
+            # check if all argument for default ansatz are None
+            if any(
+                param is not None for param in [active_space, mapper, reference_state]
+            ):
+                raise ValueError(
+                    "active_space, mapper and reference_state arguments must be None when passing an ansatz"
+                )
+
+        else:
+
+            # init active space and mapper
+            self.active_space = (
+                ActiveSpace((1, 1), 2) if active_space is None else active_space
+            )
+            self.mapper = JordanWignerMapper() if mapper is None else mapper
+
+            # init ref state and ansatz
+            self.reference_state = (
+                self._get_default_reference(self.active_space, self.mapper)
+                if reference_state is None
+                else reference_state
+            )
+            self.ansatz = self._get_default_ansatz(
                 self.active_space, self.mapper, self.reference_state
             )
-            if ansatz is None
-            else ansatz
-        )
+
+        # ansatz parameters
         self.params = (
             self._get_default_init_params(self.ansatz.num_parameters)
             if init_params is None
