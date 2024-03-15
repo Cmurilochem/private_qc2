@@ -180,3 +180,51 @@ class oo_VQE(VQE):
         return self.oo_problem.get_energy_from_mo_coeffs(
             mo_coeff_a, mo_coeff_b, one_rdm, two_rdm
         )
+
+    def _circuit_optimization(
+            self,
+            theta: List,
+            kappa: List
+    ) -> Tuple[List, float]:
+        """Get total energy and best circuit parameters for a given kappa."""
+        energy_l = []
+        theta_l = []
+
+        # get qubit Hamiltonian for given orbital rotation parameters
+        (core_energy,
+         qubit_op) = self.oo_problem.get_transformed_qubit_hamiltonian(kappa)
+
+        # build up the pennylane circuit
+        circuit = VQE._build_circuit(
+            self.device,
+            self.qubits,
+            self.ansatz,
+            qubit_op,
+        )
+
+        # Optimize the circuit parameters and compute the energy
+        circ_params = theta
+        for n in range(self.max_iterations):
+            circ_params, corr_energy = self.optimizer.step_and_cost(
+                circuit, circ_params
+            )
+            energy = corr_energy + core_energy
+            energy_l.append(energy.numpy())
+            theta_l.append(theta.numpy().tolist())
+
+            print(n, energy_l[-1])
+
+            if n > 1:
+                if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
+                    theta_optimized = theta_l[-1]
+                    energy_optimized = energy_l[-1]
+                    break
+        # in case of non-convergence
+        else:
+            raise RuntimeError(
+                "Circuit optimization step did not converge."
+                " Consider increasing 'max_iterations' attribute or"
+                " setting a different 'optimizer'."
+            )
+
+        return theta_optimized, energy_optimized
