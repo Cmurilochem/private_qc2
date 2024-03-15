@@ -1,4 +1,5 @@
 """Module defining VQE algorithm for Qiskit-Nature."""
+
 from typing import List, Tuple, Dict
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
@@ -25,7 +26,7 @@ class VQE(VQEBASE):
         optimizer=None,
         reference_state=None,
         init_params=None,
-        verbose=0
+        verbose=0,
     ):
         """Initiate the class
 
@@ -89,9 +90,7 @@ class VQE(VQEBASE):
 
     @staticmethod
     def _get_default_ansatz(
-        active_space: ActiveSpace,
-        mapper: QubitMapper,
-        reference_state: QuantumCircuit
+        active_space: ActiveSpace, mapper: QubitMapper, reference_state: QuantumCircuit
     ) -> UCC:
         """Set up the default UCC ansatz from a HF reference
 
@@ -130,18 +129,13 @@ class VQE(VQEBASE):
         self._init_qubit_hamiltonian()
 
         # create a simple callback to print intermediate results
-        intermediate_info = {
-            "nfev": [],
-            "parameters": [],
-            "energy": [],
-            "metadata": []
-        }
+        intermediate_info = {"nfev": [], "parameters": [], "energy": [], "metadata": []}
 
         def callback(nfev, parameters, energy, metadata):
-            intermediate_info['nfev'].append(nfev)
-            intermediate_info['parameters'].append(parameters)
-            intermediate_info['energy'].append(energy+self.e_core)
-            intermediate_info['metadata'].append(metadata)
+            intermediate_info["nfev"].append(nfev)
+            intermediate_info["parameters"].append(parameters)
+            intermediate_info["energy"].append(energy + self.e_core)
+            intermediate_info["metadata"].append(metadata)
             if self.verbose is not None:
                 if nfev % 2 == 0:
                     print(
@@ -156,21 +150,18 @@ class VQE(VQEBASE):
             self.optimizer,
             callback=callback,
             *args,
-            **kwargs
+            **kwargs,
         )
         solver.initial_point = self.params
 
         # call the minimizer and save final results
         result = solver.compute_minimum_eigenvalue(self.qubit_op)
-        self.params = intermediate_info['parameters'][-1]
-        self.energy = intermediate_info['energy'][-1]
+        self.params = intermediate_info["parameters"][-1]
+        self.energy = intermediate_info["energy"][-1]
 
         print("=== QISKIT VQE RESULTS ===")
-        print("* Electronic ground state "
-              f"energy (Hartree): {result.eigenvalue}")
+        print("* Electronic ground state " f"energy (Hartree): {result.eigenvalue}")
         print(f"* Inactive core energy (Hartree): {self.e_core}")
-        print(
-            f">>> Total ground state energy (Hartree): {self.energy}\n"
-        )
+        print(f">>> Total ground state energy (Hartree): {self.energy}\n")
 
         return result, intermediate_info

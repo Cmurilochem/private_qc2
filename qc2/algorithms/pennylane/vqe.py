@@ -1,4 +1,5 @@
 """Module defining VQE algorithm for PennyLane."""
+
 from typing import List, Tuple, Callable
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 import pennylane as qml
@@ -24,7 +25,7 @@ class VQE(VQEBASE):
         init_params=None,
         max_iterations=50,
         conv_tol=1e-7,
-        verbose=0
+        verbose=0,
     ):
         """Initiate the class
 
@@ -35,33 +36,46 @@ class VQE(VQEBASE):
         """
         super().__init__(qc2data, "pennylane")
 
-        # init active space and mapper
-        self.active_space = (
-            ActiveSpace((2, 2), 2) if active_space is None else active_space
-        )
+        # use the provided ansatz
+        if ansatz is not None:
+            self.ansatz = ansatz
+            if any(
+                param is not None
+                for param in [active_space, mapper, device, reference_state]
+            ):
+                raise ValueError(
+                    "active_space, mapper, device and reference_state arguments must be None when passing an ansatz"
+                )
 
-        # init circuit
-        self.device = "default.qubit" if device is None else device
-        self.mapper = JordanWignerMapper() if mapper is None else mapper
-        self.qubits = 2 * self.active_space.num_active_spatial_orbitals
-        self.electrons = sum(self.active_space.num_active_electrons)
+        # create a default ansatz
+        else:
+            # init active space and mapper
+            self.active_space = (
+                ActiveSpace((1, 1), 2) if active_space is None else active_space
+            )
+
+            # init circuit
+            self.device = "default.qubit" if device is None else device
+            self.mapper = JordanWignerMapper() if mapper is None else mapper
+            self.qubits = 2 * self.active_space.num_active_spatial_orbitals
+            self.electrons = sum(self.active_space.num_active_electrons)
+
+            self.reference_state = self._get_default_reference(
+                self.qubits, self.electrons
+            )
+
+            self.ansatz = self._get_default_ansatz(
+                self.qubits, self.electrons, self.reference_state
+            )
+
+        # init optimizer
         self.optimizer = (
             qml.GradientDescentOptimizer(stepsize=0.5)
             if optimizer is None
             else optimizer
         )
-        self.reference_state = (
-            self._get_default_reference(self.qubits, self.electrons)
-            if reference_state is None
-            else reference_state
-        )
-        self.ansatz = (
-            self._get_default_ansatz(
-                self.qubits, self.electrons, self.reference_state
-            )
-            if ansatz is None
-            else ansatz
-        )
+
+        # init params ansatz
         self.params = (
             self._get_default_init_param(self.qubits, self.electrons)
             if init_params is None
@@ -112,9 +126,13 @@ class VQE(VQEBASE):
         # Return a function that applies the UCCSD ansatz
         def ansatz(params):
             qml.UCCSD(
-                params, wires=range(qubits), s_wires=s_wires,
-                d_wires=d_wires, init_state=reference_state
+                params,
+                wires=range(qubits),
+                s_wires=s_wires,
+                d_wires=d_wires,
+                init_state=reference_state,
             )
+
         return ansatz
 
     @staticmethod
@@ -132,7 +150,7 @@ class VQE(VQEBASE):
         device_args=None,
         device_kwargs=None,
         qnode_args=None,
-        qnode_kwargs=None
+        qnode_kwargs=None,
     ) -> QNode:
         """Build and return a quantum circuit."""
         # Set default values if None
@@ -161,11 +179,7 @@ class VQE(VQEBASE):
 
         # build circuit after building the qubit hamiltonian
         self.circuit = self._build_circuit(
-            self.device,
-            self.qubits,
-            self.ansatz,
-            self.qubit_op,
-            *args, **kwargs
+            self.device, self.qubits, self.ansatz, self.qubit_op, *args, **kwargs
         )
 
         theta = self.params
@@ -174,9 +188,7 @@ class VQE(VQEBASE):
 
         # Optimize the circuit parameters and compute the energy
         for n in range(self.max_iterations):
-            theta, corr_energy = self.optimizer.step_and_cost(
-                self.circuit, theta
-            )
+            theta, corr_energy = self.optimizer.step_and_cost(self.circuit, theta)
             energy = corr_energy + self.e_core
             energy_l.append(energy)
             theta_l.append(theta)
@@ -193,12 +205,17 @@ class VQE(VQEBASE):
                         self.energy = energy_l[-1]
                         print("optimization finished.\n")
                         print("=== PENNYLANE VQE RESULTS ===")
-                        print("* Electronic ground state "
-                              f"energy (Hartree): {corr_energy:.12f}")
-                        print("* Inactive core "
-                              f"energy (Hartree): {self.e_core:.12f}")
-                        print(">>> Total ground state "
-                              f"energy (Hartree): {self.energy:.12f}\n")
+                        print(
+                            "* Electronic ground state "
+                            f"energy (Hartree): {corr_energy:.12f}"
+                        )
+                        print(
+                            "* Inactive core " f"energy (Hartree): {self.e_core:.12f}"
+                        )
+                        print(
+                            ">>> Total ground state "
+                            f"energy (Hartree): {self.energy:.12f}\n"
+                        )
                     break
         # in case of non-convergence
         else:
