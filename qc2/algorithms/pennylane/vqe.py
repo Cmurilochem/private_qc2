@@ -3,7 +3,7 @@ from typing import List, Tuple, Callable
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 import pennylane as qml
 from pennylane import numpy as np
-from pennylane.qnode import QNode
+from pennylane.workflow import QNode
 from pennylane.operation import Operator
 from qc2.algorithms.utils import ActiveSpace
 from qc2.algorithms.base import VQEBASE
