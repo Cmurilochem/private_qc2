@@ -94,7 +94,8 @@ class oo_VQE(VQE):
     def _get_rdms(
             self,
             theta: List,
-            sum_spin=True
+            sum_spin=True,
+            *args, **kwargs
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Get 1- and 2-RDMs.
 
@@ -148,6 +149,7 @@ class oo_VQE(VQE):
                 self.qubits,
                 self.ansatz,
                 qubit_ham_temp,
+                *args, **kwargs
             )
             energy_temp = circuit(theta)
 
@@ -180,11 +182,12 @@ class oo_VQE(VQE):
     def _get_energy_from_parameters(
             self,
             theta: List,
-            kappa: List
+            kappa: List,
+            *args, **kwargs
     ) -> float:
         """Get total energy given circuit and orbital parameters."""
         mo_coeff_a, mo_coeff_b = self.oo_problem.get_transformed_mos(kappa)
-        one_rdm, two_rdm = self._get_rdms(theta)
+        one_rdm, two_rdm = self._get_rdms(theta, *args, **kwargs)
         return self.oo_problem.get_energy_from_mo_coeffs(
             mo_coeff_a, mo_coeff_b, one_rdm, two_rdm
         )
@@ -192,7 +195,8 @@ class oo_VQE(VQE):
     def _circuit_optimization(
             self,
             theta: List,
-            kappa: List
+            kappa: List,
+            *args, **kwargs
     ) -> Tuple[List, float]:
         """Get total energy and best circuit parameters for a given kappa."""
         energy_l = []
@@ -208,6 +212,7 @@ class oo_VQE(VQE):
             self.qubits,
             self.ansatz,
             qubit_op,
+            *args, **kwargs
         )
 
         # Optimize the circuit parameters and compute the energy
@@ -235,7 +240,7 @@ class oo_VQE(VQE):
 
         return theta_optimized, energy_optimized
 
-    def run(self) -> Tuple[List, List, List]:
+    def run(self, *args, **kwargs) -> Tuple[List, List, List]:
         """Optimize both the circuit and orbital parameters."""
         print(">>> Optimizing circuit and orbital parameters...")
 
@@ -262,21 +267,27 @@ class oo_VQE(VQE):
         energy_l = []
 
         # get initial energy from initial circuit params
-        energy_init = self._get_energy_from_parameters(theta, kappa)
+        energy_init = self._get_energy_from_parameters(
+            theta, kappa, *args, **kwargs
+        )
         if self.verbose is not None:
             print(f"iter = 000, energy = {energy_init:.12f} Ha")
             energy_l.append(energy_init)
 
         for n in range(self.max_iterations):
             # optimize circuit parameters with fixed kappa
-            theta, _ = self._circuit_optimization(theta, kappa)
+            theta, _ = self._circuit_optimization(
+                theta, kappa, *args, **kwargs
+            )
 
             # optimize orbital parameters with fixed theta from previous run
-            rdm1, rdm2 = self._get_rdms(theta)
+            rdm1, rdm2 = self._get_rdms(theta, *args, **kwargs)
             kappa, _ = self.oo_problem.orbital_optimization(rdm1, rdm2, kappa)
 
             # calculate final energy with all optimized parameters
-            energy = self._get_energy_from_parameters(theta, kappa)
+            energy = self._get_energy_from_parameters(
+                theta, kappa, *args, **kwargs
+            )
 
             theta_l.append(theta)
             kappa_l.append(kappa)
