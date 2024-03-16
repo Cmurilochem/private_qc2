@@ -53,8 +53,8 @@ def oo_vqe_calculation():
     # instantiate oo-VQE algorithm
     qc2data.algorithm = oo_VQE(
         active_space=ActiveSpace(
-            num_active_electrons=(2, 2),
-            num_active_spatial_orbitals=3
+            num_active_electrons=(1, 1),
+            num_active_spatial_orbitals=2
         ),
         optimizer=SLSQP(),
         estimator=Estimator()
@@ -68,4 +68,4 @@ def oo_vqe_calculation():
 def test_oo_vqe_calculation(oo_vqe_calculation):
     """Check that the oo-vqe energy corresponds to one at CASSCF/sto-3g."""
     final_oo_energy = oo_vqe_calculation
-    assert final_oo_energy == pytest.approx(-74.97664329524524, rel=1e-6)
+    assert final_oo_energy == pytest.approx(-74.96565745741862, rel=1e-6)

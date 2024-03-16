@@ -134,9 +134,9 @@ class oo_VQE(VQE):
 
             # put the values in np arrays (differentiate 1- and 2-RDM)
             if length == 2:
-                rdm1_spin[iele, jele] = energy_temp
+                rdm1_spin[iele, jele] = energy_temp[0]
             elif length == 4:
-                rdm2_spin[iele, lele, jele, kele] = energy_temp
+                rdm2_spin[iele, lele, jele, kele] = energy_temp[0]
 
         if sum_spin:
             # get spin-free RDMs
