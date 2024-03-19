@@ -13,7 +13,33 @@ from qc2.algorithms.utils import ActiveSpace
 
 
 class VQE(VQEBASE):
-    """Main class for VQE"""
+    """
+    Main class for the VQE algorithm with Qiskit-Nature.
+
+    This class initializes and executes the VQE algorithm using specified
+    quantum components like ansatz, optimizer, and estimator.
+
+    Attributes:
+        active_space (ActiveSpace): Describes the active space for quantum
+            simulation. Defaults to ``ActiveSpace((2, 2), 2)``.
+        mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
+            Defaults to :class:`qiskit.JordanWignerMapper`.
+        estimator (BaseEstimator): Method for estimating the
+            expectation value. Defaults to :class:`qiskit.Estimator`
+        optimizer (qiskit.Optmizer): Optimization routine for circuit
+            variational parameters. Defaults to
+            :class:`qiskit_algorithms.SLSQP`.
+        reference_state (QuantumCircuit): Reference state for the VQE
+            algorithm. Defaults to :class:`qiskit.HartreeFock`.
+        ansatz (UCC): The ansatz for the VQE algorithm.
+            Defaults to :class:`qiskit.UCCSD`.
+        params (List): List of VQE circuit parameters. It gets updated
+            during the optimization process. Defaults to a list with
+            entries of zero.
+        verbose (int): Verbosity level. Defaults to 0.
+        energy (float): Calculated energy value after running VQE.
+            Defaults to None.
+    """
 
     def __init__(
         self,
@@ -27,12 +53,50 @@ class VQE(VQEBASE):
         init_params=None,
         verbose=0
     ):
-        """Initiate the class
+        """Initializes the VQE class.
 
         Args:
-            qc2data (data container): qc2 data container with scf informatioms
-            active_space (ActiveSpace, optional): Description of the active sapce. Defaults to ActiveSpace((2, 2), 2).
-            mapper (qiskit_nature.second_q.mappers, optional): Method used to map the qubits. Defaults to JordanWignerMapper().
+            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+            ansatz (UCC): The ansatz for the VQE algorithm.
+                Defaults to :class:`qiskit.UCCSD`.
+            active_space (ActiveSpace): Describes the active space for quantum
+                simulation. Defaults to ``ActiveSpace((2, 2), 2)``.
+            mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
+                Defaults to :class:`qiskit.JordanWignerMapper`.
+            estimator (BaseEstimator): Method for estimating the
+                expectation value. Defaults to :class:`qiskit.Estimator`
+            optimizer (qiskit.Optmizer): Optimization routine for circuit
+                variational parameters. Defaults to
+                :class:`qiskit_algorithms.SLSQP`.
+            reference_state (QuantumCircuit): Reference state for the VQE
+                algorithm. Defaults to :class:`qiskit.HartreeFock`.
+            init_params (List): List of VQE circuit parameters.
+                Defaults to a list with entries of zero.
+            verbose (int): Verbosity level. Defaults to 0.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.qiskit import VQE
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.run()
+        >>> qc2data.algorithm = VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     optimizer=SLSQP(),
+        ...     estimator=Estimator(),
+        ... )
+        >>> result, intermediate_info = qc2data.algorithm.run()
         """
 
         super().__init__(qc2data, "qiskit")
@@ -72,14 +136,14 @@ class VQE(VQEBASE):
     def _get_default_reference(
         active_space: ActiveSpace, mapper: QubitMapper
     ) -> QuantumCircuit:
-        """Set up the default reference state circuit
+        """Set up the default reference state circuit based on Hartree Fock.
 
         Args:
-            active_space (ActiveSpace): description of the active space
-            mapper (mapper): mapper class instance
+            active_space (ActiveSpace): description of the active space.
+            mapper (mapper): mapper class instance.
 
         Returns:
-            QuantumCircuit: hartree fock circuit
+            QuantumCircuit: Hartree Fock circuit as the reference state.
         """
         return HartreeFock(
             active_space.num_active_spatial_orbitals,
@@ -93,15 +157,15 @@ class VQE(VQEBASE):
         mapper: QubitMapper,
         reference_state: QuantumCircuit
     ) -> UCC:
-        """Set up the default UCC ansatz from a HF reference
+        """Set up the default UCC ansatz from a Hartree Fock reference state.
 
         Args:
-            active_space (ActiveSpace): description of the active space
-            mapper (mapper): mapper class instance
-            reference_state (QuantumCircuit): reference state circuit
+            active_space (ActiveSpace): Description of the active space.
+            mapper (QubitMapper): Mapper class instance.
+            reference_state (QuantumCircuit): Reference state circuit.
 
         Returns:
-            QuantumCircuit: circuit ansatz
+            UCC: UCC ansatz quantum circuit.
         """
 
         return UCC(
@@ -114,18 +178,53 @@ class VQE(VQEBASE):
 
     @staticmethod
     def _get_default_init_params(nparams: List) -> List:
-        """Set up the init para,s
+        """Generates a list of initial circuit parameters for the ansatz.
 
         Args:
-            nparams (List): default values
+            nparams (int): Number of parameters in the ansatz.
 
         Returns:
-            List : List of params values
+            List[float]: List of initial parameter values (all zeros).
         """
         return [0.0] * nparams
 
     def run(self, *args, **kwargs) -> Tuple[VQEResult, Dict]:
-        """Run the algo"""
+        """Executes the VQE algorithm.
+
+        Args:
+            *args: Variable length argument list to be passed to
+                the :class:`qiskit_algorithm.VQE` class.
+            **kwargs: Arbitrary keyword arguments to be passed to
+                the :class:`qiskit_algorithm.VQE` class.
+
+        Returns:
+            Tuple[VQEResult, Dict]:
+                The VQE result and a dictionary with intermediate information.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.qiskit import VQE
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.run()
+        >>> qc2data.algorithm = VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     optimizer=SLSQP(),
+        ...     estimator=Estimator(),
+        ... )
+        >>> result, intermediate_info = qc2data.algorithm.run()
+        """
         # create Hamiltonian
         self._init_qubit_hamiltonian()
 

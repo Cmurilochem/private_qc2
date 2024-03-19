@@ -165,11 +165,11 @@ def test_tranformed_fermionic_hamiltonian(qc2_data_qcschema_instance):
     qc2_data_qcschema_instance.run()
     # define electronic structure problem in AO basis
     ao_es_problem = qc2_data_qcschema_instance.process_schema(
-            basis=ElectronicBasis.AO
+            basis='atomic'
     )
     # get es problem in MO basis to compare
     mo_es_problem = qc2_data_qcschema_instance.process_schema(
-            basis=ElectronicBasis.MO
+            basis='molecular'
     )
     mo_hamiltonian = mo_es_problem.hamiltonian.second_q_op()
     # define AO-to-MO transformation matrices
@@ -177,10 +177,10 @@ def test_tranformed_fermionic_hamiltonian(qc2_data_qcschema_instance):
         [[0.54884228,  1.21245192],
          [0.54884228, -1.21245192]]
     )
-    mo_coeff_b = mo_coeff_a
     # transformed AO problem to MO basis
     t_es_problem, _ = qc2_data_qcschema_instance.get_transformed_hamiltonian(
-        ao_es_problem, mo_coeff_a, mo_coeff_b, "atomic", "molecular"
+        initial_es_problem=ao_es_problem, matrix_transform_a=mo_coeff_a,
+        initial_basis="atomic", final_basis="molecular"
     )
     t_hamiltonian = t_es_problem.hamiltonian.second_q_op()
     # test that the final fermionic hamiltonians are equivalent
@@ -198,14 +198,13 @@ def test_tranformed_qubit_hamiltonian(qc2_data_qcschema_instance, format):
     qc2_data_qcschema_instance.run()
     # define electronic structure problem in AO basis
     ao_es_problem = qc2_data_qcschema_instance.process_schema(
-            basis=ElectronicBasis.AO
+            basis='atomic'
     )
     # define AO-to-MO transformation matrices
     mo_coeff_a = np.array(
         [[0.54884228,  1.21245192],
          [0.54884228, -1.21245192]]
     )
-    mo_coeff_b = mo_coeff_a
     if format == "pennylane" and not pennylane_available:
         pytest.skip()
     # get qubit Hamiltonian directly from MO basis
@@ -222,7 +221,6 @@ def test_tranformed_qubit_hamiltonian(qc2_data_qcschema_instance, format):
         transform=True,
         initial_es_problem=ao_es_problem,
         matrix_transform_a=mo_coeff_a,
-        matrix_transform_b=mo_coeff_b,
         initial_basis='atomic',
         final_basis='molecular'
     )

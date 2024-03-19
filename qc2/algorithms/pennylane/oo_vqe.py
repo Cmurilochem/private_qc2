@@ -1,7 +1,6 @@
-""""Module defining oo VQE algorithm for PennyLane."""
+"""Module defining oo-VQE algorithm for PennyLane."""
 from typing import List, Tuple
 import itertools as itt
-import pennylane as qml
 from pennylane import numpy as np
 from qiskit_nature.second_q.operators import FermionicOp
 from qc2.algorithms.pennylane import VQE
@@ -10,21 +9,27 @@ from qc2.pennylane.convert import _qiskit_nature_to_pennylane
 
 
 class oo_VQE(VQE):
-    """Main class for orbital-optimized VQE with Pennylane.
+    """Main class for orbital-optimized VQE with PennyLane.
+
+    This class is responsible for optimizing both circuit and orbital
+    parameters of simple molecules. Analytic first and second derivatives are
+    considered in the orbital optimization part.
 
     Attributes:
         freeze_active (bool): If True, freezes the active
             space during optimization.
-        orbital_params (List): Initial parameters for orbital optimization.
-        circuit_params (List): Parameters for the VQE circuit,
-            inherited from VQE class.
-        oo_problem (OrbitalOptimization): The orbital optimization problem
-            definition, initially None.
-        max_iterations (int): Maximum number of iterations for the optimizer.
+        orbital_params (List): List of orbital optimization parameters.
+            It gets updated during the optimization process.
+        circuit_params (List): List of VQE circuit parameters.
+            It gets updated during the optimization process.
+        oo_problem (OrbitalOptimization): An instance of
+            :class:`~qc2.algorithms.utils.OrbitalOptimization` problem class.
+            Defaults to None.
+        max_iterations (int): Maximum number of iterations for the combined
+            circuit-orbitals parameters optimization. Defaults to 50.
         conv_tol (float): Convergence tolerance for the optimization.
-        verbose (int): Verbosity level.
-        energy (float): Stores the result of the VQE computation,
-            initially None.
+            Defaults to 1e-7.
+        verbose (int): Verbosity level. Defaults to 0.
     """
     def __init__(
         self,
@@ -45,21 +50,56 @@ class oo_VQE(VQE):
         """Initializes the oo-VQE class.
 
         Args:
-            qc2data (qc2Data, optional): An instance of :class:`~qc2.data.qc2Data`.
-            ansatz (Any): The ansatz for the VQE algorithm.
-            active_space (Any): Definition of the active space.
-            mapper (Any): Strategy for fermionic-to-qubit mapping.
-            device (Any): Device for estimating the expectation value.
-            optimizer (Any): Optimization routine for variational parameters.
-            reference_state (Any): Reference state for the VQE algorithm.
-            init_circuit_params (Any): Initial parameters for the VQE circuit.
-            init_orbital_params (Any): Initial parameters for the
-                orbital optimization part.
-            freeze_active (bool): If True, active space is frozen
-                during orbital optimization.
-            max_iterations (int): Maximum number of iterations in optimization.
-            conv_tol (float): Convergence tolerance for optimization.
-            verbose (int): Level of verbosity.
+            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+            ansatz (Callable): The ansatz for the VQE algorithm.
+                Defaults to ``qml.UCCSD``.
+            active_space (ActiveSpace): Instance of
+                :class:`~qc2.algorithm.utils.ActiveSpace`.
+                Defaults to ``ActiveSpace((2, 2), 2)``.
+            mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
+                Defaults to ``JordanWignerMapper``.
+            device (qml.device): Device for estimating the expectation value.
+                Defaults to ``default.qubit``.
+            optimizer (qml.optimizer): Optimization routine for circuit
+                variational parameters. Defaults
+                to ``qml.GradientDescentOptimizer``.
+            reference_state (qml.ref_state): Reference state for the VQE
+                algorithm. Defaults to ``qml.qchem.hf_state``.
+            init_circuit_params (List): List of VQE circuit parameters.
+                Defaults to a list with entries of zero.
+            init_orbital_params (List): List of orbital optimization
+                parameters. Defaults to a list with entries of zero.
+            freeze_active (bool): If True, freezes the active
+                space during optimization.
+            max_iterations (int): Maximum number of iterations for the combined
+                circuit-orbitals parameters optimization. Defaults to 50.
+            conv_tol (float): Convergence tolerance for the optimization.
+                Defaults to 1e-7.
+            verbose (int): Verbosity level. Defaults to 0.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.pennylane import oo_VQE
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.run()
+        >>> qc2data.algorithm = oo_VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
+        ...     device="default.qubit"
+        ... )
+        >>> energy_l, theta_l, kappa_l = qc2data.algorithm.run()
         """
         super().__init__(
             qc2data,
@@ -91,157 +131,50 @@ class oo_VQE(VQE):
         """
         return [0.0] * n_kappa
 
-    def _get_rdms(
-            self,
-            theta: List,
-            sum_spin=True,
-            *args, **kwargs
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Get 1- and 2-RDMs.
+    def run(self, *args, **kwargs) -> Tuple[List, List, List]:
+        """Optimizes both the circuit and orbital parameters.
 
         Args:
-            theta (List): circuit parameters with which
-                to calculate RDMs.
-            sum_spin (bool): If True, the spin-summed 1-RDM and 2-RDM will be
-                returned. If False, the full 1-RDM and 2-RDM will be returned.
-                Defaults to True.
+            *args:
+                - device_args (optional): ``qml.device`` arguments.
+                - qnode_args (optional): ``qml.qnode`` arguments.
+            **kwargs:
+                - device_kwargs (optional): ``qml.device`` keyword arguments.
+                - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
 
         Returns:
-            Tuple[np.ndarray, np.ndarray]: 1- and 2-RDMs.
+            Tuple[List, List, List]:
+                - energy_l (List): List with final ground-state energies
+                  per iteration.
+                - theta_l (List): List with optimized circuit parameters
+                  per iteration.
+                - kappa_l (List): List with optimized orbital rotation
+                  parameters per iteration.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.pennylane import oo_VQE
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.run()
+        >>> qc2data.algorithm = oo_VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
+        ...     device="default.qubit"
+        ... )
+        >>> energy_l, theta_l, kappa_l = qc2data.algorithm.run()
         """
-        if len(theta) != len(self.params):
-            raise ValueError("Incorrect dimension for amplitude list.")
-
-        # initialize the RDM arrays
-        n_mol_orbitals = self.active_space.num_active_spatial_orbitals
-        n_spin_orbitals = self.active_space.num_active_spatial_orbitals * 2
-        rdm1_spin = np.zeros((n_spin_orbitals,) * 2, dtype=complex)
-        rdm2_spin = np.zeros((n_spin_orbitals,) * 4, dtype=complex)
-
-        # get the fermionic hamiltonian
-        _, _, fermionic_op = self.qc2data.get_fermionic_hamiltonian(
-            self.active_space.num_active_electrons,
-            self.active_space.num_active_spatial_orbitals
-        )
-
-        # run over the hamiltonian terms and calculate expectation values
-        for key, _ in fermionic_op.terms():
-            # assign indices depending on one- or two-body term
-            length = len(key)
-            if length == 2:
-                iele, jele = (int(ele[1]) for ele in tuple(key[0:2]))
-            elif length == 4:
-                iele, jele, kele, lele = (int(ele[1]) for ele in tuple(key[0:4]))
-
-            # get fermionic and qubit representation of each term
-            fermionic_ham_temp = FermionicOp.from_terms([(key, 1.0)])
-            qubit_ham_temp_qiskit = self.mapper.map(
-                fermionic_ham_temp, register_length=n_spin_orbitals
-            )
-
-            # convert qiskit SparsePauliOp to pennylane Operator
-            coefficients, operators = _qiskit_nature_to_pennylane(qubit_ham_temp_qiskit)
-            qubit_ham_temp = sum(c * op for c, op in zip(coefficients, operators))
-
-            # calculate expectation values
-            circuit = VQE._build_circuit(
-                self.device,
-                self.qubits,
-                self.ansatz,
-                qubit_ham_temp,
-                *args, **kwargs
-            )
-            energy_temp = circuit(theta)
-
-            # put the values in np arrays (differentiate 1- and 2-RDM)
-            if length == 2:
-                rdm1_spin[iele, jele] = energy_temp
-            elif length == 4:
-                rdm2_spin[iele, lele, jele, kele] = energy_temp
-
-        if sum_spin:
-            # get spin-free RDMs
-            rdm1_np = np.zeros((n_mol_orbitals,) * 2, dtype=np.complex128)
-            rdm2_np = np.zeros((n_mol_orbitals,) * 4, dtype=np.complex128)
-
-            # construct spin-summed 1-RDM
-            mod = n_spin_orbitals // 2
-            for i, j in itt.product(range(n_spin_orbitals), repeat=2):
-                rdm1_np[i % mod, j % mod] += rdm1_spin[i, j]
-
-            # construct spin-summed 2-RDM
-            for i, j, k, l in itt.product(range(n_spin_orbitals), repeat=4):
-                rdm2_np[
-                    i % mod, j % mod, k % mod, l % mod
-                ] += rdm2_spin[i, j, k, l]
-
-            return rdm1_np, rdm2_np
-
-        return rdm1_spin, rdm2_spin
-
-    def _get_energy_from_parameters(
-            self,
-            theta: List,
-            kappa: List,
-            *args, **kwargs
-    ) -> float:
-        """Get total energy given circuit and orbital parameters."""
-        mo_coeff_a, mo_coeff_b = self.oo_problem.get_transformed_mos(kappa)
-        one_rdm, two_rdm = self._get_rdms(theta, *args, **kwargs)
-        return self.oo_problem.get_energy_from_mo_coeffs(
-            mo_coeff_a, mo_coeff_b, one_rdm, two_rdm
-        )
-
-    def _circuit_optimization(
-            self,
-            theta: List,
-            kappa: List,
-            *args, **kwargs
-    ) -> Tuple[List, float]:
-        """Get total energy and best circuit parameters for a given kappa."""
-        energy_l = []
-        theta_l = []
-
-        # get qubit Hamiltonian for given orbital rotation parameters
-        (core_energy,
-         qubit_op) = self.oo_problem.get_transformed_qubit_hamiltonian(kappa)
-
-        # build up the pennylane circuit
-        circuit = VQE._build_circuit(
-            self.device,
-            self.qubits,
-            self.ansatz,
-            qubit_op,
-            *args, **kwargs
-        )
-
-        # Optimize the circuit parameters and compute the energy
-        circ_params = theta
-        for n in range(self.max_iterations):
-            circ_params, corr_energy = self.optimizer.step_and_cost(
-                circuit, circ_params
-            )
-            energy = corr_energy + core_energy
-            energy_l.append(energy)
-            theta_l.append(circ_params)
-
-            if n > 1:
-                if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
-                    theta_optimized = theta_l[-1]
-                    energy_optimized = energy_l[-1]
-                    break
-        # in case of non-convergence
-        else:
-            raise RuntimeError(
-                "Circuit optimization step did not converge."
-                " Consider increasing 'max_iterations' attribute or"
-                " setting a different 'optimizer'."
-            )
-
-        return theta_optimized, energy_optimized
-
-    def run(self, *args, **kwargs) -> Tuple[List, List, List]:
-        """Optimize both the circuit and orbital parameters."""
         print(">>> Optimizing circuit and orbital parameters...")
 
         # instantiate oo class
@@ -316,3 +249,190 @@ class oo_VQE(VQE):
             )
 
         return energy_l, theta_l, kappa_l
+
+    def _circuit_optimization(
+            self,
+            theta: List,
+            kappa: List,
+            *args, **kwargs
+    ) -> Tuple[List, float]:
+        """Get total energy and best circuit parameters for a given kappa.
+
+        Args:
+            theta (List): List with circuit variational parameters.
+            kappa (List): List with orbital rotation parameters.
+            *args:
+                - device_args (optional): ``qml.device`` arguments.
+                - qnode_args (optional): ``qml.qnode`` arguments.
+            **kwargs:
+                - device_kwargs (optional): ``qml.device`` keyword arguments.
+                - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
+
+        Returns:
+            Tuple[List, float]:
+                Optimized circuit parameters and associated energy.
+        """
+        energy_l = []
+        theta_l = []
+
+        # get qubit Hamiltonian for given orbital rotation parameters
+        (core_energy,
+         qubit_op) = self.oo_problem.get_transformed_qubit_hamiltonian(kappa)
+
+        # build up the pennylane circuit
+        circuit = VQE._build_circuit(
+            self.device,
+            self.qubits,
+            self.ansatz,
+            qubit_op,
+            *args, **kwargs
+        )
+
+        # Optimize the circuit parameters and compute the energy
+        circ_params = theta
+        for n in range(self.max_iterations):
+            circ_params, corr_energy = self.optimizer.step_and_cost(
+                circuit, circ_params
+            )
+            energy = corr_energy + core_energy
+            energy_l.append(energy)
+            theta_l.append(circ_params)
+
+            if n > 1:
+                if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
+                    theta_optimized = theta_l[-1]
+                    energy_optimized = energy_l[-1]
+                    break
+        # in case of non-convergence
+        else:
+            raise RuntimeError(
+                "Circuit optimization step did not converge."
+                " Consider increasing 'max_iterations' attribute or"
+                " setting a different 'optimizer'."
+            )
+
+        return theta_optimized, energy_optimized
+
+    def _get_energy_from_parameters(
+            self,
+            theta: List,
+            kappa: List,
+            *args, **kwargs
+    ) -> float:
+        """Calculates total energy given circuit and orbital parameters.
+
+        Args:
+            theta (List): List with circuit variational parameters.
+            kappa (List): List with orbital rotation parameters.
+            *args:
+                - device_args (optional): ``qml.device`` arguments.
+                - qnode_args (optional): ``qml.qnode`` arguments.
+            **kwargs:
+                - device_kwargs (optional): ``qml.device`` keyword arguments.
+                - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
+
+        Returns:
+            float:
+                Total ground-state energy for a given circuit
+                and orbital parameters.
+        """
+        mo_coeff_a, mo_coeff_b = self.oo_problem.get_transformed_mos(kappa)
+        one_rdm, two_rdm = self._get_rdms(theta, *args, **kwargs)
+        return self.oo_problem.get_energy_from_mo_coeffs(
+            mo_coeff_a, mo_coeff_b, one_rdm, two_rdm
+        )
+
+    def _get_rdms(
+            self,
+            theta: List,
+            sum_spin=True,
+            *args, **kwargs
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculates 1- and 2-electron reduced density matrices (RDMs).
+
+        Args:
+            theta (List): circuit parameters at which
+                RDMs are calculated.
+            sum_spin (bool): If True, the spin-summed 1-RDM and 2-RDM will be
+                returned. If False, the full 1-RDM and 2-RDM will be returned.
+                Defaults to True.
+            *args:
+                - device_args (optional): ``qml.device`` arguments.
+                - qnode_args (optional): ``qml.qnode`` arguments.
+            **kwargs:
+                - device_kwargs (optional): ``qml.device`` keyword arguments.
+                - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]:
+                1- and 2-RDMs.
+        """
+        if len(theta) != len(self.params):
+            raise ValueError("Incorrect dimension for amplitude list.")
+
+        # initialize the RDM arrays
+        n_mol_orbitals = self.active_space.num_active_spatial_orbitals
+        n_spin_orbitals = self.active_space.num_active_spatial_orbitals * 2
+        rdm1_spin = np.zeros((n_spin_orbitals,) * 2, dtype=complex)
+        rdm2_spin = np.zeros((n_spin_orbitals,) * 4, dtype=complex)
+
+        # get the fermionic hamiltonian
+        _, _, fermionic_op = self.qc2data.get_fermionic_hamiltonian(
+            self.active_space.num_active_electrons,
+            self.active_space.num_active_spatial_orbitals
+        )
+
+        # run over the hamiltonian terms and calculate expectation values
+        for key, _ in fermionic_op.terms():
+            # assign indices depending on one- or two-body term
+            length = len(key)
+            if length == 2:
+                iele, jele = (int(ele[1]) for ele in tuple(key[0:2]))
+            elif length == 4:
+                iele, jele, kele, lele = (int(ele[1]) for ele in tuple(key[0:4]))
+
+            # get fermionic and qubit representation of each term
+            fermionic_ham_temp = FermionicOp.from_terms([(key, 1.0)])
+            qubit_ham_temp_qiskit = self.mapper.map(
+                fermionic_ham_temp, register_length=n_spin_orbitals
+            )
+
+            # convert qiskit `SparsePauliOp` to pennylane `Operator`
+            coefficients, operators = _qiskit_nature_to_pennylane(qubit_ham_temp_qiskit)
+            qubit_ham_temp = sum(c * op for c, op in zip(coefficients, operators))
+
+            # calculate expectation values
+            circuit = VQE._build_circuit(
+                self.device,
+                self.qubits,
+                self.ansatz,
+                qubit_ham_temp,
+                *args, **kwargs
+            )
+            energy_temp = circuit(theta)
+
+            # put the values in np arrays (differentiate 1- and 2-RDM)
+            if length == 2:
+                rdm1_spin[iele, jele] = energy_temp
+            elif length == 4:
+                rdm2_spin[iele, lele, jele, kele] = energy_temp
+
+        if sum_spin:
+            # get spin-free RDMs
+            rdm1_np = np.zeros((n_mol_orbitals,) * 2, dtype=np.complex128)
+            rdm2_np = np.zeros((n_mol_orbitals,) * 4, dtype=np.complex128)
+
+            # construct spin-summed 1-RDM
+            mod = n_spin_orbitals // 2
+            for i, j in itt.product(range(n_spin_orbitals), repeat=2):
+                rdm1_np[i % mod, j % mod] += rdm1_spin[i, j]
+
+            # construct spin-summed 2-RDM
+            for i, j, k, l in itt.product(range(n_spin_orbitals), repeat=4):
+                rdm2_np[
+                    i % mod, j % mod, k % mod, l % mod
+                ] += rdm2_spin[i, j, k, l]
+
+            return rdm1_np, rdm2_np
+
+        return rdm1_spin, rdm2_spin

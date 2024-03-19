@@ -21,8 +21,14 @@ from qiskit_nature.second_q.transformers import BasisTransformer
 from qiskit_nature.second_q.problems import ElectronicBasis
 from qiskit_nature.second_q.operators import ElectronicIntegrals
 
-from pennylane.operation import Operator
-from qc2.pennylane.convert import import_operator
+# try importing PennyLane and set `PennyLaneOperatorType`
+try:
+    from pennylane.operation import Operator
+    from qc2.pennylane.convert import import_operator
+    PennyLaneOperatorType = Operator
+except ImportError:
+    PennyLaneOperatorType = object
+
 from qc2.algorithms.base import BaseAlgorithm
 from qc2.ase.qc2_ase_base_class import BaseQc2ASECalculator
 
@@ -38,11 +44,15 @@ class qc2Data:
             Options are ``qcschema`` or ``fcidump``.
             Defaults to ``qcschema``.
 
-        _filename (str): The path to the HDF5 or fcidump file used
+        filename (str): The path to the HDF5 or fcidump file used
             to save/read qchem data.
 
-        _molecule (Atoms): Attribute representing the
+        molecule (Atoms): Attribute representing the
             molecular structure as an ASE :class:`ase.atoms.Atoms` instance.
+
+        algorithm (BaseAlgorithm): Instance of the algorithm to be run.
+            Examples are :class:`qc2.algorithm.qiskit.vqe` and
+            :class:`qc2.algorithm.pennylane.oo_vqe`.
     """
 
     def __init__(
@@ -60,22 +70,34 @@ class qc2Data:
                 data.
             molecule (Atoms): An optional :class:`ase.atoms.Atoms`
                 instance representing the target molecule.
+            algorithm (BaseAlgorithm): Algorithm to be run.
+                Examples are :class:`qc2.algorithm.qiskit.vqe` and
+                :class:`qc2.algorithm.pennylane.oo_vqe`.
             schema (Optional[str]): An optional attribute defining the format
                 in which to save qchem data. Options are ``qcschema`` or
                 ``fcidump``. Defaults to ``qcschema``.
 
         **Example**
 
-        >>> from qc2.data import qc2Data
         >>> from ase.build import molecule
+        >>> from qc2.data import qc2Data
+        >>> from qc2.ase import PySCF
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>> from qc2.algorithm.qiskit import VQE
         >>>
         >>> mol = molecule('H2')
         >>>
         >>> hdf5_file = 'h2.hdf5'
         >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
-        >>>
-        >>> fcidump_file = 'h2.fcidump'
-        >>> qc2data = qc2Data(fcidump_file, mol, schema='fcidump')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.algorithm = VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(1, 1),
+        ...         num_active_spatial_orbitals=2
+        ...     ),
+        ... )
+        >>> qc2data.run()            # => run classical qc2-ASE calculator
+        >>> qc2data.algorithm.run()  # => run quantum algorithm
         """
         # define attributes
         self._schema = schema
@@ -90,7 +112,7 @@ class qc2Data:
 
     @property
     def molecule(self) -> Atoms:
-        """Returs the molecule attribute.
+        """Returns the molecule attribute.
 
         Returns:
             Molecule as an ASE :class:`ase.atoms.Atoms` object.
@@ -104,12 +126,16 @@ class qc2Data:
 
     @property
     def algorithm(self) -> BaseAlgorithm:
-        """Returns the algo"""
+        """Returns the chosen algorithm.
+
+        Returns:
+            Instance of an algorithm class, *e.g.*, VQE.
+        """
         return self._algorithm
 
     @algorithm.setter
     def algorithm(self, algorithm: BaseAlgorithm) -> None:
-        """set the algo"""
+        """Sets the algorithm attribute."""
         self._algorithm = algorithm
         if hasattr(algorithm, "set_qc2data"):
             algorithm.set_qc2data(self)
@@ -219,13 +245,20 @@ class qc2Data:
 
     def process_schema(
             self,
-            basis: ElectronicBasis = ElectronicBasis.MO
+            *,
+            basis: str = "molecular"
     ) -> ElectronicStructureProblem:
         """Creates an instance of :class:`ElectronicStructureProblem`.
 
         Reads data using the :meth:`~.read_schema` method and converts it into
         an instance of :class:`ElectronicStructureProblem` based on the
-        specified schema format (``fcidump`` or ``qcschema``).
+        specified schema format (``fcidump`` or ``qcschema``) and
+        electronic basis as defined by :class:`qiskit.ElectronicBasis`.
+
+        Args:
+            basis (str, optional): The basis in which to construct
+                the :class:`ElectronicStructureProblem`. Options are ``atomic``
+                or ``molecular``. Defaults to ``molecular``.
 
         Returns:
             ElectronicStructureProblem:
@@ -253,17 +286,21 @@ class qc2Data:
         >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
         >>> qc2data.molecule.calc = DIRAC(...)  # => specify qchem calculator
         >>> qc2data.run()
-        >>> elec_problem = qc2data.process_schema()
+        >>> es_problem = qc2data.process_schema(basis='atomic')
         >>>
         >>> fcidump_file = 'h2.fcidump'
         >>> qc2data = qc2Data(fcidump_file, mol, schema='fcidump')
         >>> qc2data.molecule.calc = DIRAC(...)  # => specify qchem calculator
         >>> qc2data.run()
-        >>> elec_problem = qc2data.process_schema()
+        >>> es_problem = qc2data.process_schema()
         """
         # read data and store it in a `QCSchema` or `FCIDump`
         # dataclass instances
         schema = self.read_schema()
+
+        # convert electronic basis from string to an instance
+        # of :class:`qiskit.ElectronicBasis`
+        basis = ElectronicBasis(basis)
 
         if self._schema == "fcidump":
             # convert `FCIDump` into `ElectronicStructureProblem`;
@@ -289,7 +326,7 @@ class qc2Data:
                 beta active electrons.
             num_spatial_orbitals (int): The number of spatial orbitals.
             initial_es_problem (Optional[ElectronicStructureProblem]):
-                  An instance of :class:`ElectronicStructureProblem`.
+                  Initial instance of :class:`ElectronicStructureProblem`.
                   If None, it is instantiated internally. Defaults to None.
 
         Returns:
@@ -369,9 +406,10 @@ class qc2Data:
 
     def get_transformed_hamiltonian(
             self,
+            *,
             initial_es_problem: ElectronicStructureProblem,
             matrix_transform_a: np.ndarray,
-            matrix_transform_b: np.ndarray,
+            matrix_transform_b: Optional[np.ndarray] = None,
             initial_basis: str = "atomic",
             final_basis: str = "molecular",
     ) -> Tuple[ElectronicStructureProblem, ElectronicEnergy]:
@@ -382,8 +420,8 @@ class qc2Data:
                 The original electronic structure problem.
             matrix_transform_a (np.ndarray): The transformation matrix
                 for alpha spin orbitals.
-            matrix_transform_b (np.ndarray): The transformation matrix
-                for beta spin orbitals.
+            matrix_transform_b (np.ndarray, optional): The transformation
+                matrix for beta spin orbitals.
             initial_basis (str, optional): The initial basis set.
                 Defaults to ``atomic``.
             final_basis (str, optional): The final basis set to transform to.
@@ -397,9 +435,35 @@ class qc2Data:
                 - transformed_hamiltonian (ElectronicEnergy):
                   An instance of :class:`ElectronicEnergy`,
                   the transformed Hamiltonian.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>>
+        >>> mol = molecule('H2')
+        >>> hdf5_file = 'h2.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF(...)  # => specify qchem calculator
+        >>> qc2data.run()
+        >>> ao_es_problem = qc2data.process_schema(basis='atomic')
+        >>> mo_coeff_a = np.array(
+        ...     [[0.54884228,  1.21245192],
+        ...      [0.54884228, -1.21245192]]
+        ... )
+        >>> mo_es_problem, hamiltonian = qc2data.get_transformed_hamiltonian(
+        ...     initial_es_problem=ao_es_problem,
+        ...     matrix_transform_a=mo_coeff_a,
+        ...     initial_basis="atomic",
+        ...     final_basis="molecular"
+        ... )
         """
         initial_basis = ElectronicBasis(initial_basis)
         final_basis = ElectronicBasis(final_basis)
+
+        if matrix_transform_b is None:
+            matrix_transform_b = matrix_transform_a
 
         # create an instance of `BasisTransformer`
         transformer = BasisTransformer(
@@ -496,12 +560,14 @@ class qc2Data:
                 - es_problem (ElectronicStructureProblem): An instance of the
                   :class:`ElectronicStructureProblem`.
                 - second_q_op (FermionicOp): An instance of
-                  :class:`FermionicOp` representing the ferm. Hamiltonian
+                  :class:`FermionicOp` representing the fermionic Hamiltonian
                   in 2nd quantization.
 
         Raises:
             ValueError: If :attr:`num_electrons` or
                 :attr:`num_spatial_orbitals` is None.
+                Or If :attr:`initial_es_problem` is None
+                for :attr:`transform` equal True.
 
         Notes:
             Based on the qiskit-nature modules:
@@ -538,15 +604,21 @@ class qc2Data:
             )
 
         transformed_es_problem = None
-        if transform is True and initial_es_problem is not None:
-            # Transform `ElectronicStructureProblem` to a new basis
-            transformed_es_problem, _ = self.get_transformed_hamiltonian(
-                initial_es_problem,
-                matrix_transform_a,
-                matrix_transform_b,
-                initial_basis,
-                final_basis
-            )
+        if transform is True:
+            if initial_es_problem is not None:
+                # Transform `ElectronicStructureProblem` to a new basis
+                transformed_es_problem, _ = self.get_transformed_hamiltonian(
+                    initial_es_problem=initial_es_problem,
+                    matrix_transform_a=matrix_transform_a,
+                    matrix_transform_b=matrix_transform_b,
+                    initial_basis=initial_basis,
+                    final_basis=final_basis
+                )
+            else:
+                raise ValueError(
+                    "The initial value of 'initial_es_problem' cannot be "
+                    "'None' if 'transform' is 'True'."
+                )
 
         # calculate active space `ElectronicEnergy` hamiltonian
         (es_problem, core_energy,
@@ -577,12 +649,12 @@ class qc2Data:
             matrix_transform_b: Optional[np.ndarray] = None,
             initial_basis: str = "atomic",
             final_basis: str = "molecular",
-    ) -> Tuple[float, Union[SparsePauliOp, Operator]]:
+    ) -> Tuple[float, Union[SparsePauliOp, PennyLaneOperatorType]]:
         """Generates the qubit Hamiltonian of a target molecule.
 
         This method generates the qubit Hamiltonian representation of a target
         molecule. It can optionally perform a basis set transformation if the
-        `transform` flag is True.
+        ``transform`` flag is True.
 
         Args:
             num_electrons (Union[int, Tuple[int, int]]):

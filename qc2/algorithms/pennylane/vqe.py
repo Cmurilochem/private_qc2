@@ -10,7 +10,38 @@ from qc2.algorithms.base import VQEBASE
 
 
 class VQE(VQEBASE):
-    """Main class for VQE"""
+    """
+    Main class for the VQE algorithm with PennyLane.
+
+    This class initializes and executes the VQE algorithm using specified
+    quantum components like ansatz, optimizer, and estimator.
+
+    Attributes:
+        ansatz (Callable): The ansatz for the VQE algorithm.
+            Defaults to ``qml.UCCSD``.
+        active_space (ActiveSpace): Instance of
+            :class:`~qc2.algorithm.utils.ActiveSpace`.
+            Defaults to ``ActiveSpace((2, 2), 2)``.
+        mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
+            Defaults to ``JordanWignerMapper``.
+        device (qml.device): Device for estimating the expectation value.
+            Defaults to ``default.qubit``.
+        optimizer (qml.optimizer): Optimization routine for circuit
+            variational parameters. Defaults
+            to ``qml.GradientDescentOptimizer``.
+        reference_state (qml.ref_state): Reference state for the VQE
+            algorithm. Defaults to ``qml.qchem.hf_state``.
+        params (List): List of VQE circuit parameters.
+            It gets updated during the optimization process.
+            Defaults to a list with entries of zero.
+        max_iterations (int): Maximum number of iterations for the combined
+            circuit-orbitals parameters optimization. Defaults to 50.
+        conv_tol (float): Convergence tolerance for the optimization.
+            Defaults to 1e-7.
+        verbose (int): Verbosity level. Defaults to 0.
+        circuit (QNode): Quantum circuit generated for the VQE algorithm.
+        energy (float): Calculated energy after running VQE. Defaults to None.
+    """
 
     def __init__(
         self,
@@ -26,12 +57,55 @@ class VQE(VQEBASE):
         conv_tol=1e-7,
         verbose=0
     ):
-        """Initiate the class
+        """Initializes the VQE class.
 
         Args:
-            qc2data (data container): qc2 data container with scf informatioms
-            active_space (ActiveSpace, optional): Description of the active sapce. Defaults to ActiveSpace((2, 2), 2).
-            mapper (qiskit_nature.second_q.mappers, optional): Method used to map the qubits. Defaults to JordanWignerMapper().
+            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+            ansatz (Callable): The ansatz for the VQE algorithm.
+                Defaults to ``qml.UCCSD``.
+            active_space (ActiveSpace): Instance of
+                :class:`~qc2.algorithm.utils.ActiveSpace`.
+                Defaults to ``ActiveSpace((2, 2), 2)``.
+            mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
+                Defaults to ``JordanWignerMapper``.
+            device (qml.device): Device for estimating the expectation value.
+                Defaults to ``default.qubit``.
+            optimizer (qml.optimizer): Optimization routine for circuit
+                variational parameters. Defaults
+                to ``qml.GradientDescentOptimizer``.
+            reference_state (qml.ref_state): Reference state for the VQE
+                algorithm. Defaults to ``qml.qchem.hf_state``.
+            init_params (List): List of VQE circuit parameters.
+                Defaults to a list with entries of zero.
+            max_iterations (int): Maximum number of iterations for the combined
+                circuit-orbitals parameters optimization. Defaults to 50.
+            conv_tol (float): Convergence tolerance for the optimization.
+                Defaults to 1e-7.
+            verbose (int): Verbosity level. Defaults to 0.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.pennylane import VQE
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.run()
+        >>> qc2data.algorithm = VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
+        ...     device="default.qubit"
+        ... )
+        >>> energy_l, theta_l = qc2data.algorithm.run()
         """
         super().__init__(qc2data, "pennylane")
 
@@ -77,14 +151,14 @@ class VQE(VQEBASE):
 
     @staticmethod
     def _get_default_reference(qubits: int, electrons: int) -> np.ndarray:
-        """Set up default reference state
+        """Generate the default reference state for the ansatz.
 
         Args:
-            qubits (_type_): _description_
-            electrons (_type_): _description_
+            qubits (int): Number of qubits in the circuit.
+            electrons (int): Number of electrons in the system.
 
         Returns:
-            _type_: _description_
+            np.ndarray: Reference state vector.
         """
         return qml.qchem.hf_state(electrons, qubits)
 
@@ -92,17 +166,16 @@ class VQE(VQEBASE):
     def _get_default_ansatz(
         qubits: int, electrons: int, reference_state: np.ndarray
     ) -> Callable:
-        """Set up default ansatz
+        """Create the default ansatz function for the VQE circuit.
 
         Args:
-            qubits (_type_): _description_
-            electrons (_type_): _description_
-            reference_state (_type_): _description_
+            qubits (int): Number of qubits in the circuit.
+            electrons (int): Number of electrons in the system.
+            reference_state (np.ndarray): Reference state for the ansatz.
 
         Returns:
-            _type_: _description_
+            Callable: Function that applies the UCCSD ansatz.
         """
-
         # Generate single and double excitations
         singles, doubles = qml.qchem.excitations(electrons, qubits)
 
@@ -119,6 +192,15 @@ class VQE(VQEBASE):
 
     @staticmethod
     def _get_default_init_params(qubits: int, electrons: int) -> np.ndarray:
+        """Generate default initial parameters for the ansatz.
+
+        Args:
+            qubits (int): Number of qubits in the circuit.
+            electrons (int): Number of electrons in the system.
+
+        Returns:
+            np.ndarray: Array of initial parameter values.
+        """
         # Generate single and double excitations
         singles, doubles = qml.qchem.excitations(electrons, qubits)
         return np.zeros(len(singles) + len(doubles))
@@ -134,7 +216,25 @@ class VQE(VQEBASE):
         qnode_args=None,
         qnode_kwargs=None
     ) -> QNode:
-        """Build and return a quantum circuit."""
+        """Builds and return PennyLane QNode.
+
+        Args:
+            dev (str): PennyLane quantum device.
+            qubits (int): Number of qubits in the circuit.
+            ansatz (Callable): Ansatz function for the circuit.
+            qubit_op (Operator): Qubit operator for the Hamiltonian.
+            device_args (list, optional): Additional arguments for the quantum
+                device. Defaults to None.
+            device_kwargs (dict, optional): Additional keyword arguments for
+                the quantum device. Defaults to None.
+            qnode_args (list, optional): Additional arguments for the QNode.
+                Defaults to None.
+            qnode_kwargs (dict, optional): Additional keyword arguments for
+                the QNode. Defaults to None.
+
+        Returns:
+            QNode: PennyLane qnode with built-in ansatz.
+        """
         # Set default values if None
         device_args = device_args if device_args is not None else []
         device_kwargs = device_kwargs if device_kwargs is not None else {}
@@ -153,7 +253,47 @@ class VQE(VQEBASE):
         return circuit
 
     def run(self, *args, **kwargs) -> Tuple[List, List]:
-        """Run the algo"""
+        """Executes VQE algorithm.
+
+        Args:
+            *args:
+                - device_args (optional): ``qml.device`` arguments.
+                - qnode_args (optional): ``qml.qnode`` arguments.
+            **kwargs:
+                - device_kwargs (optional): ``qml.device`` keyword arguments.
+                - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
+
+        Returns:
+            Tuple[List, List]:
+                - energy_l (List): List with final ground-state energies
+                  per iteration.
+                - theta_l (List): List with optimized circuit parameters
+                  per iteration.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.pennylane import VQE
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> qc2data.molecule.calc = PySCF()
+        >>> qc2data.run()
+        >>> qc2data.algorithm = VQE(
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
+        ...     device="default.qubit"
+        ... )
+        >>> energy_l, theta_l = qc2data.algorithm.run()
+        """
         print(">>> Optimizing circuit parameters...")
 
         # create Hamiltonian

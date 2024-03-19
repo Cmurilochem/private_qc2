@@ -1,13 +1,19 @@
-"""Module defining orbital optimization class util."""
+"""This module defines the orbital optimization class used in oo-VQE."""
 from typing import List, Tuple, Optional, Union
 import numpy as np
 from scipy.linalg import expm
-from scipy.optimize import minimize
-from pennylane.operation import Operator
 from qiskit.quantum_info import SparsePauliOp
 from qiskit_nature.second_q.mappers import QubitMapper, JordanWignerMapper
 from qiskit_nature.second_q.problems import ElectronicBasis
 from qiskit_nature.second_q.operators.tensor_ordering import to_chemist_ordering
+
+# try importing PennyLane and set `PennyLaneOperatorType`
+try:
+    from pennylane.operation import Operator
+    PennyLaneOperatorType = Operator
+except ImportError:
+    PennyLaneOperatorType = object
+
 from qc2.data import qc2Data
 from qc2.algorithms.utils import (
     ActiveSpace,
@@ -29,8 +35,9 @@ class OrbitalOptimization():
     Attributes:
         qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
         schema_dataclass (QCSchema): An instance of :class:`QCSchema`.
-        es_problem (ElectronicStructureProblem): The electronic structure
-            problem in AO basis as processed from the schema.
+        es_problem (ElectronicStructureProblem): Instance of
+            :class:`ElectronicStructureProblem` in AO basis as
+            processed from :meth:`~qc2.data.qc2Data.process_schema`.
         n_electrons (Tuple[int, int]): Number of alpha and beta electrons.
         nao (int): Number of spatial orbitals.
         n_active_orbitals (int): Number of active orbitals to consider.
@@ -56,8 +63,8 @@ class OrbitalOptimization():
         Initializes the OrbitalOptimization class.
 
         Args:
-            qc2data (qc2Data): An instance of qc2Data containing quantum
-                chemistry information.
+            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`
+                containing quantum chemistry information.
             active_space (ActiveSpace): Instance of
                 :class:`~qc2.algorithms.utils.ActiveSpace`
                 containing the description of the active space.
@@ -65,8 +72,8 @@ class OrbitalOptimization():
                 frozen in the optimization process. Defaults to False.
             mapper (QubitMapper, optional): An instance of :class:`QubitMapper`
                 to be used in mapping orbitals to qubits.
-                Defaults to JordanWignerMapper.
-            format (str, optional): Which quantum backend we want to use.
+                Defaults to ``JordanWignerMapper``.
+            format (str, optional): Determines the quantum backend we want to use.
                 Defaults to "qiskit".
 
         **Example**
@@ -74,6 +81,8 @@ class OrbitalOptimization():
         >>> from ase.build import molecule
         >>> from qc2.ase import PySCF
         >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.utils import OrbitalOptimization
+        >>> from qc2.algorithms.utils import ActiveSpace
         >>>
         >>> mol = molecule('H2O')
         >>>
@@ -87,6 +96,12 @@ class OrbitalOptimization():
         ...     ),
         ...     mapper=JordanWignerMapper(),
         ...     format="qiskit"
+        ... )
+        >>> rdm1 = np.array(...)
+        >>> rdm2 = np.array(...)
+        >>> kappa_init = [0.0] * oo.n_kappa
+        >>> optimized_kappa, energy = oo.orbital_optimization(
+        ...     rdm1, rdm2, kappa_init
         ... )
         """
         # molecule related attributes
@@ -128,45 +143,6 @@ class OrbitalOptimization():
         self.mapper = mapper
         self.format = format
 
-    def get_transformed_qubit_hamiltonian(
-            self,
-            kappa: List
-    ) -> Tuple[float, Union[SparsePauliOp, Operator]]:
-        """Sets up the qubit Hamiltonian in the transformed MO basis.
-
-        Args:
-            kappa (List): Orbital rotation parameters vector.
-
-        Returns:
-            Tuple[float, SparsePauliOp]:
-                - core_energy (float): The core energy after active space
-                  and MO transformation.
-                - qubit_op (Union[SparsePauliOp, Operator]):
-                  If the format is ``qiskit``, it returns a
-                  :class:`SparsePauliOp` representing the
-                  tranformed qubit Hamiltonian in the qiskit format.
-                  If the format is ``pennylane``, it returns a
-                  :class:`Operator` instance representing the
-                  qubit Hamiltonian in the PennyLane format.
-        """
-        (k_matrix_transform_a,
-         k_matrix_transform_b) = self.get_transformed_mos(kappa)
-
-        # get rotated qubit hamiltonian in MO basis
-        core_energy, qubit_op = self.qc2data.get_qubit_hamiltonian(
-            self.n_active_electrons,
-            self.n_active_orbitals,
-            self.mapper,
-            format=self.format,
-            transform=True,
-            initial_es_problem=self.es_problem,
-            matrix_transform_a=k_matrix_transform_a,
-            matrix_transform_b=k_matrix_transform_b,
-            initial_basis='atomic',
-            final_basis='molecular'
-        )
-        return core_energy, qubit_op
-
     def orbital_optimization(
             self,
             rdm1: np.ndarray,
@@ -182,8 +158,36 @@ class OrbitalOptimization():
                 parameters vector. If None, set guess as a zero vector.
 
         Returns:
-            Tuple[List, float]: Updated orbital rotation matrix
-                and associated energy.
+            Tuple[List, float]:
+                Optimized orbital rotation parameters and associated energy.
+
+        **Example**
+
+        >>> from ase.build import molecule
+        >>> from qc2.ase import PySCF
+        >>> from qc2.data import qc2Data
+        >>> from qc2.algorithms.utils import OrbitalOptimization
+        >>> from qc2.algorithms.utils import ActiveSpace
+        >>>
+        >>> mol = molecule('H2O')
+        >>>
+        >>> hdf5_file = 'h2o.hdf5'
+        >>> qc2data = qc2Data(hdf5_file, mol, schema='qcschema')
+        >>> oo_problem = OrbitalOptimization(
+        ...     qc2data=qc2data,
+        ...     active_space=ActiveSpace(
+        ...         num_active_electrons=(2, 2),
+        ...         num_active_spatial_orbitals=4
+        ...     ),
+        ...     mapper=JordanWignerMapper(),
+        ...     format="qiskit"
+        ... )
+        >>> rdm1 = np.array(...)
+        >>> rdm2 = np.array(...)
+        >>> kappa_init = [0.0] * oo.n_kappa
+        >>> optimized_kappa, energy = oo.orbital_optimization(
+        ...     rdm1, rdm2, kappa_init
+        ... )
         """
         def objective_function(kappa):
             return self.get_energy_from_kappa(kappa, rdm1, rdm2)
@@ -486,6 +490,45 @@ class OrbitalOptimization():
              np.einsum("pq, pq", one_electron_integrals[0], rdm1),
              0.5 * np.einsum("pqrs, pqrs", two_electron_integrals[0], rdm2))
         ).real
+
+    def get_transformed_qubit_hamiltonian(
+            self,
+            kappa: List
+    ) -> Tuple[float, Union[SparsePauliOp, PennyLaneOperatorType]]:
+        """Sets up the qubit Hamiltonian in the transformed MO basis.
+
+        Args:
+            kappa (List): Orbital rotation parameters vector.
+
+        Returns:
+            Tuple[float, SparsePauliOp]:
+                - core_energy (float): The core energy after active space
+                  and MO transformation.
+                - qubit_op (Union[SparsePauliOp, Operator]):
+                  If the format is ``qiskit``, it returns a
+                  :class:`SparsePauliOp` representing the
+                  tranformed qubit Hamiltonian in the qiskit format.
+                  If the format is ``pennylane``, it returns a
+                  :class:`Operator` instance representing the
+                  qubit Hamiltonian in the PennyLane format.
+        """
+        (k_matrix_transform_a,
+         k_matrix_transform_b) = self.get_transformed_mos(kappa)
+
+        # get rotated qubit hamiltonian in MO basis
+        core_energy, qubit_op = self.qc2data.get_qubit_hamiltonian(
+            self.n_active_electrons,
+            self.n_active_orbitals,
+            self.mapper,
+            format=self.format,
+            transform=True,
+            initial_es_problem=self.es_problem,
+            matrix_transform_a=k_matrix_transform_a,
+            matrix_transform_b=k_matrix_transform_b,
+            initial_basis='atomic',
+            final_basis='molecular'
+        )
+        return core_energy, qubit_op
 
     def get_transformed_mos(self, kappa: List) -> Tuple[
         np.ndarray, np.ndarray
