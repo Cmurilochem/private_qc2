@@ -56,8 +56,9 @@ class oo_VQE(VQE):
             active_space (ActiveSpace): Instance of
                 :class:`~qc2.algorithm.utils.ActiveSpace`.
                 Defaults to ``ActiveSpace((2, 2), 2)``.
-            mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
-                Defaults to ``JordanWignerMapper``.
+            mapper (str): Strategy for fermionic-to-qubit mapping.
+                Common options are ``jw`` for ``JordanWignerMapper``
+                or "bk" for ``BravyiKitaevMapper``. Defaults to ``jw``.
             device (qml.device): Device for estimating the expectation value.
                 Defaults to ``default.qubit``.
             optimizer (qml.optimizer): Optimization routine for circuit
@@ -96,6 +97,7 @@ class oo_VQE(VQE):
         ...         num_active_electrons=(2, 2),
         ...         num_active_spatial_orbitals=4
         ...     ),
+        ...     mapper="jw",
         ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
         ...     device="default.qubit"
         ... )

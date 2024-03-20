@@ -34,33 +34,13 @@ def skew_symmetric_to_vector(kappa_matrix):
     return kappa_matrix[tril_indices[0], tril_indices[1]]
 
 
-def get_active_space_idx(
-        nao, nelectron,
-        n_active_orbitals,
-        n_active_electrons
-):
-    """Calculates active space indices given active orbitals and electrons."""
-    # Set active space parameters
-    nelecore = sum(nelectron) - sum(n_active_electrons)
-    if nelecore % 2 == 1:
-        raise ValueError('odd number of core electrons')
-
-    occ_idx = np.arange(nelecore // 2)
-    act_idx = (occ_idx[-1] + 1 + np.arange(n_active_orbitals)
-               if len(occ_idx) > 0
-               else np.arange(n_active_orbitals))
-    virt_idx = np.arange(act_idx[-1]+1, nao)
-
-    return occ_idx, act_idx, virt_idx
-
-
 def reshape_2(arr, dim, dim_2=None):
     """Helper function to reshape a flattened 2D array."""
     return np.asarray(arr).reshape((dim, dim_2 if dim_2 is not None else dim))
 
 
 def get_non_redundant_indices(occ_idx, act_idx, virt_idx, freeze_active):
-    """Calculate non-redundant indices for kappa given an active space."""
+    """Calculate non-redundant indices for orbital parameters."""
     no, na, nv = len(occ_idx), len(act_idx), len(virt_idx)
     nao = no + na + nv
     rotation_sizes = [no * na, na * nv, no * nv]

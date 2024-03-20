@@ -9,7 +9,7 @@ from qiskit.primitives import Estimator
 from qiskit.circuit import QuantumCircuit
 from qiskit_algorithms.optimizers import SLSQP
 from qc2.algorithms.base import VQEBASE
-from qc2.algorithms.utils import ActiveSpace
+from qc2.algorithms.utils import ActiveSpace, FermionicToQubitMapper
 
 
 class VQE(VQEBASE):
@@ -61,8 +61,9 @@ class VQE(VQEBASE):
                 Defaults to :class:`qiskit.UCCSD`.
             active_space (ActiveSpace): Describes the active space for quantum
                 simulation. Defaults to ``ActiveSpace((2, 2), 2)``.
-            mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
-                Defaults to :class:`qiskit.JordanWignerMapper`.
+            mapper (str): Strategy for fermionic-to-qubit mapping.
+                Common options are ``jw`` for ``JordanWignerMapper``
+                or "bk" for ``BravyiKitaevMapper``. Defaults to ``jw``.
             estimator (BaseEstimator): Method for estimating the
                 expectation value. Defaults to :class:`qiskit.Estimator`
             optimizer (qiskit.Optmizer): Optimization routine for circuit
@@ -93,6 +94,7 @@ class VQE(VQEBASE):
         ...         num_active_electrons=(2, 2),
         ...         num_active_spatial_orbitals=4
         ...     ),
+        ...     mapper="jw",
         ...     optimizer=SLSQP(),
         ...     estimator=Estimator(),
         ... )
@@ -105,7 +107,11 @@ class VQE(VQEBASE):
         self.active_space = (
             ActiveSpace((2, 2), 2) if active_space is None else active_space
         )
-        self.mapper = JordanWignerMapper() if mapper is None else mapper
+        self.mapper = (
+            FermionicToQubitMapper.from_string('jw')()
+            if mapper is None
+            else FermionicToQubitMapper.from_string(mapper)()
+        )
 
         # init circuit
         self.estimator = Estimator() if estimator is None else estimator

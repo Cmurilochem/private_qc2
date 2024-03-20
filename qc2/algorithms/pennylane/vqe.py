@@ -5,7 +5,7 @@ import pennylane as qml
 from pennylane import numpy as np
 from pennylane.workflow import QNode
 from pennylane.operation import Operator
-from qc2.algorithms.utils import ActiveSpace
+from qc2.algorithms.utils import ActiveSpace, FermionicToQubitMapper
 from qc2.algorithms.base import VQEBASE
 
 
@@ -66,8 +66,9 @@ class VQE(VQEBASE):
             active_space (ActiveSpace): Instance of
                 :class:`~qc2.algorithm.utils.ActiveSpace`.
                 Defaults to ``ActiveSpace((2, 2), 2)``.
-            mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
-                Defaults to ``JordanWignerMapper``.
+            mapper (str): Strategy for fermionic-to-qubit mapping.
+                Common options are ``jw`` for ``JordanWignerMapper``
+                or "bk" for ``BravyiKitaevMapper``. Defaults to ``jw``.
             device (qml.device): Device for estimating the expectation value.
                 Defaults to ``default.qubit``.
             optimizer (qml.optimizer): Optimization routine for circuit
@@ -102,6 +103,7 @@ class VQE(VQEBASE):
         ...         num_active_electrons=(2, 2),
         ...         num_active_spatial_orbitals=4
         ...     ),
+        ...     mapper="jw",
         ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
         ...     device="default.qubit"
         ... )
@@ -116,7 +118,11 @@ class VQE(VQEBASE):
 
         # init circuit
         self.device = "default.qubit" if device is None else device
-        self.mapper = JordanWignerMapper() if mapper is None else mapper
+        self.mapper = (
+            FermionicToQubitMapper.from_string('jw')()
+            if mapper is None
+            else FermionicToQubitMapper.from_string(mapper)()
+        )
         self.qubits = 2 * self.active_space.num_active_spatial_orbitals
         self.electrons = sum(self.active_space.num_active_electrons)
         self.optimizer = (
