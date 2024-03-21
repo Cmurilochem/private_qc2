@@ -8,7 +8,6 @@ Notes:
 
 from ase.build import molecule
 
-from qiskit_nature.second_q.mappers import BravyiKitaevMapper
 from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 
@@ -40,7 +39,7 @@ qc2data.algorithm = VQE(
     ),
     optimizer=SLSQP(),
     estimator=Estimator(),
-    mapper=BravyiKitaevMapper(),
+    mapper="bk",
 )
 
 # run the calc
