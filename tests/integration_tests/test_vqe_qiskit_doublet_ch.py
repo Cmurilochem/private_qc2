@@ -2,7 +2,6 @@ import os
 import glob
 import pytest
 from ase.build import molecule
-from qiskit_nature.second_q.mappers import BravyiKitaevMapper
 from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 from qc2.ase import PySCF
@@ -51,7 +50,7 @@ def vqe_calculation():
             num_active_electrons=(3, 2),
             num_active_spatial_orbitals=5,
         ),
-        mapper=BravyiKitaevMapper(),
+        mapper="bk",
         optimizer=SLSQP(),
         estimator=Estimator(),
     )

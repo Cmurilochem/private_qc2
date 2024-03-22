@@ -45,7 +45,7 @@ def vqe_result():
             num_active_electrons=(4, 2),
             num_active_spatial_orbitals=5
         ),
-        mapper=JordanWignerMapper(),
+        mapper="jw",
         optimizer=SLSQP(),
         estimator=Estimator(),
     )

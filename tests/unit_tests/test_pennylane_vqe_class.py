@@ -8,7 +8,6 @@ from ase.build import molecule
 from qc2.data import qc2Data
 from qc2.ase import PySCF
 from qc2.algorithms.utils import ActiveSpace
-from qiskit_nature.second_q.mappers import BravyiKitaevMapper
 
 try:
     import pennylane as qml
@@ -76,7 +75,7 @@ def test_initialization_with_ansatz():
             num_active_electrons=(1, 1),
             num_active_spatial_orbitals=2
         ),
-        mapper=BravyiKitaevMapper(),
+        mapper="bk",
         device="default.qubit",
     )
     assert isinstance(vqe, VQE)

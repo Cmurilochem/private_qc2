@@ -2,7 +2,7 @@
 from typing import List, Tuple, Callable
 import pennylane as qml
 from pennylane import numpy as np
-from pennylane.workflow import QNode
+from pennylane import QNode
 from pennylane.operation import Operator
 from qc2.algorithms.utils import ActiveSpace, FermionicToQubitMapper
 from qc2.algorithms.base import VQEBASE

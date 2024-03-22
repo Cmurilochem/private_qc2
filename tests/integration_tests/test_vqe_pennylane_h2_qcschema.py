@@ -2,7 +2,6 @@ import os
 import glob
 import pytest
 from ase.build import molecule
-from qiskit_nature.second_q.mappers import JordanWignerMapper
 from qc2.ase import PySCF
 from qc2.data import qc2Data
 from qc2.algorithms.utils import ActiveSpace
@@ -53,7 +52,7 @@ def vqe_calculation():
             num_active_electrons=(1, 1),
             num_active_spatial_orbitals=2
         ),
-        mapper=JordanWignerMapper(),
+        mapper="jw",
         optimizer=qml.GradientDescentOptimizer(stepsize=0.5)
     )
 

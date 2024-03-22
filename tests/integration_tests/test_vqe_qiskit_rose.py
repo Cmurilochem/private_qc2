@@ -2,7 +2,6 @@ import subprocess
 import shutil
 import pytest
 
-from qiskit_nature.second_q.mappers import JordanWignerMapper
 from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 
@@ -94,7 +93,7 @@ def vqe_calculation():
             num_active_electrons=(2, 2),
             num_active_spatial_orbitals=3
         ),
-        mapper=JordanWignerMapper(),
+        mapper="jw",
         optimizer=SLSQP(),
         estimator=Estimator(),
     )
