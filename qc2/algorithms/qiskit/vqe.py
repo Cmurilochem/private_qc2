@@ -1,6 +1,5 @@
 """Module defining VQE algorithm for Qiskit-Nature."""
 from typing import List, Tuple, Dict
-from qiskit_nature.second_q.mappers import JordanWignerMapper
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 from qiskit_nature.second_q.mappers import QubitMapper
 from qiskit_algorithms.minimum_eigensolvers import VQE as vqe_solver
@@ -56,7 +55,7 @@ class VQE(VQEBASE):
         """Initializes the VQE class.
 
         Args:
-            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+            qc2data (qc2Data): An instance of :class:`~qc2.data.data.qc2Data`.
             ansatz (UCC): The ansatz for the VQE algorithm.
                 Defaults to :class:`qiskit.UCCSD`.
             active_space (ActiveSpace): Describes the active space for quantum
@@ -149,7 +148,7 @@ class VQE(VQEBASE):
             mapper (mapper): mapper class instance.
 
         Returns:
-            QuantumCircuit: Hartree Fock circuit as the reference state.
+            QuantumCircuit: Hartree-Fock circuit as the reference state.
         """
         return HartreeFock(
             active_space.num_active_spatial_orbitals,

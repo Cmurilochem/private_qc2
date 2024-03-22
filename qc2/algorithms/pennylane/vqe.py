@@ -1,6 +1,5 @@
 """Module defining VQE algorithm for PennyLane."""
 from typing import List, Tuple, Callable
-from qiskit_nature.second_q.mappers import JordanWignerMapper
 import pennylane as qml
 from pennylane import numpy as np
 from pennylane.workflow import QNode
@@ -20,7 +19,7 @@ class VQE(VQEBASE):
         ansatz (Callable): The ansatz for the VQE algorithm.
             Defaults to ``qml.UCCSD``.
         active_space (ActiveSpace): Instance of
-            :class:`~qc2.algorithm.utils.ActiveSpace`.
+            :class:`~qc2.algorithm.utils.activate_space.ActiveSpace`.
             Defaults to ``ActiveSpace((2, 2), 2)``.
         mapper (QubitMapper): Strategy for fermionic-to-qubit mapping.
             Defaults to ``JordanWignerMapper``.
@@ -60,11 +59,11 @@ class VQE(VQEBASE):
         """Initializes the VQE class.
 
         Args:
-            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+            qc2data (qc2Data): An instance of :class:`~qc2.data.data.qc2Data`.
             ansatz (Callable): The ansatz for the VQE algorithm.
                 Defaults to ``qml.UCCSD``.
             active_space (ActiveSpace): Instance of
-                :class:`~qc2.algorithm.utils.ActiveSpace`.
+                :class:`~qc2.algorithm.utils.active_space.ActiveSpace`.
                 Defaults to ``ActiveSpace((2, 2), 2)``.
             mapper (str): Strategy for fermionic-to-qubit mapping.
                 Common options are ``jw`` for ``JordanWignerMapper``

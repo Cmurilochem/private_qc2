@@ -24,8 +24,8 @@ class oo_VQE(VQE):
         circuit_params (List): List of VQE circuit parameters.
             It gets updated during the optimization process.
         oo_problem (OrbitalOptimization): An instance of
-            :class:`~qc2.algorithms.utils.OrbitalOptimization` problem class.
-            Defaults to None.
+            :class:`~qc2.algorithms.utils.orbital_optimization.OrbitalOptimization`
+            problem class. Defaults to None.
         max_iterations (int): Maximum number of iterations for the combined
             circuit-orbitals parameters optimization. Defaults to 50.
         conv_tol (float): Convergence tolerance for the optimization.
@@ -51,11 +51,11 @@ class oo_VQE(VQE):
         """Initializes the oo-VQE class.
 
         Args:
-            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+            qc2data (qc2Data): An instance of :class:`~qc2.data.data.qc2Data`.
             ansatz (UCC): The ansatz for the VQE algorithm.
                 Defaults to :class:`qiskit.UCCSD`.
             active_space (ActiveSpace): Instance of
-                :class:`~qc2.algorithm.utils.ActiveSpace`.
+                :class:`~qc2.algorithm.utils.active_space.ActiveSpace`.
                 Defaults to ``ActiveSpace((2, 2), 2)``.
             mapper (str): Strategy for fermionic-to-qubit mapping.
                 Common options are ``jw`` for ``JordanWignerMapper``
