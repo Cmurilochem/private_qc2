@@ -242,10 +242,10 @@ class VQE(VQEBASE):
         }
 
         def callback(nfev, parameters, energy, metadata):
-            intermediate_info['nfev'].append(nfev)
-            intermediate_info['parameters'].append(parameters)
-            intermediate_info['energy'].append(energy+self.e_core)
-            intermediate_info['metadata'].append(metadata)
+            intermediate_info["nfev"].append(nfev)
+            intermediate_info["parameters"].append(parameters)
+            intermediate_info["energy"].append(energy + self.e_core)
+            intermediate_info["metadata"].append(metadata)
             if self.verbose is not None:
                 if nfev % 2 == 0:
                     print(
@@ -266,8 +266,8 @@ class VQE(VQEBASE):
 
         # call the minimizer and save final results
         result = solver.compute_minimum_eigenvalue(self.qubit_op)
-        self.params = intermediate_info['parameters'][-1]
-        self.energy = intermediate_info['energy'][-1]
+        self.params = intermediate_info["parameters"][-1]
+        self.energy = intermediate_info["energy"][-1]
 
         print("=== QISKIT VQE RESULTS ===")
         print("* Electronic ground state "

@@ -68,6 +68,12 @@ def test_initialization_with_ansatz():
     )
     vqe = VQE(
         ansatz=ansatz,
+        reference_state=reference_state,
+        active_space=ActiveSpace(
+            num_active_electrons=(1, 1),
+            num_active_spatial_orbitals=2
+        ),
+        mapper="bk",
         optimizer=COBYLA(),
         estimator=Estimator(),
     )
