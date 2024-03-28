@@ -1,14 +1,14 @@
 """Module defining VQE algorithm for Qiskit-Nature."""
-from typing import List, Tuple, Dict
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 from qiskit_nature.second_q.mappers import QubitMapper
 from qiskit_algorithms.minimum_eigensolvers import VQE as vqe_solver
-from qiskit_algorithms.minimum_eigensolvers import VQEResult
+from qiskit_algorithms.optimizers import SLSQP
 from qiskit.primitives import Estimator
 from qiskit.circuit import QuantumCircuit
-from qiskit_algorithms.optimizers import SLSQP
-from qc2.algorithms.base import VQEBASE
-from qc2.algorithms.utils import ActiveSpace, FermionicToQubitMapper
+from qc2.algorithms.base.vqe_base import VQEBASE
+from qc2.algorithms.algorithms_results import VQEResults
+from qc2.algorithms.utils.active_space import ActiveSpace
+from qc2.algorithms.utils.mappers import FermionicToQubitMapper
 
 
 class VQE(VQEBASE):
@@ -32,12 +32,9 @@ class VQE(VQEBASE):
             algorithm. Defaults to :class:`qiskit.HartreeFock`.
         ansatz (UCC): The ansatz for the VQE algorithm.
             Defaults to :class:`qiskit.UCCSD`.
-        params (List): List of VQE circuit parameters. It gets updated
-            during the optimization process. Defaults to a list with
-            entries of zero.
+        params (List): List of initial VQE circuit parameters.
+            Defaults to a list with entries of zero.
         verbose (int): Verbosity level. Defaults to 0.
-        energy (float): Calculated energy value after running VQE.
-            Defaults to None.
     """
 
     def __init__(
@@ -97,7 +94,7 @@ class VQE(VQEBASE):
         ...     optimizer=SLSQP(),
         ...     estimator=Estimator(),
         ... )
-        >>> result, intermediate_info = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
 
         super().__init__(qc2data, "qiskit")
@@ -135,7 +132,6 @@ class VQE(VQEBASE):
 
         # init algorithm-specific attributes
         self.verbose = verbose
-        self.energy = None
 
     @staticmethod
     def _get_default_reference(
@@ -193,7 +189,7 @@ class VQE(VQEBASE):
         """
         return [0.0] * nparams
 
-    def run(self, *args, **kwargs) -> Tuple[VQEResult, Dict]:
+    def run(self, *args, **kwargs) -> VQEResults:
         """Executes the VQE algorithm.
 
         Args:
@@ -203,8 +199,9 @@ class VQE(VQEBASE):
                 the :class:`qiskit_algorithm.VQE` class.
 
         Returns:
-            Tuple[VQEResult, Dict]:
-                The VQE result and a dictionary with intermediate information.
+            VQEResults:
+                An instance of :class:`qc2.algorithms.qiskit.vqe.VQEResults`
+                class with all VQE info.
 
         **Example**
 
@@ -228,7 +225,7 @@ class VQE(VQEBASE):
         ...     optimizer=SLSQP(),
         ...     estimator=Estimator(),
         ... )
-        >>> result, intermediate_info = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         # create Hamiltonian
         self._init_qubit_hamiltonian()
@@ -241,7 +238,12 @@ class VQE(VQEBASE):
             "metadata": []
         }
 
-        def callback(nfev, parameters, energy, metadata):
+        def callback(
+            nfev: int,
+            parameters: List,
+            energy: float,
+            metadata: Dict
+        ) -> None:
             intermediate_info["nfev"].append(nfev)
             intermediate_info["parameters"].append(parameters)
             intermediate_info["energy"].append(energy + self.e_core)
@@ -265,16 +267,23 @@ class VQE(VQEBASE):
         solver.initial_point = self.params
 
         # call the minimizer and save final results
-        result = solver.compute_minimum_eigenvalue(self.qubit_op)
-        self.params = intermediate_info["parameters"][-1]
-        self.energy = intermediate_info["energy"][-1]
+        qiskit_res = solver.compute_minimum_eigenvalue(self.qubit_op)
+
+        # instantiate VQEResults
+        results = VQEResults()
+        results.optimizer_evals = intermediate_info["nfev"][-1]
+        results.optimal_energy = intermediate_info["energy"][-1]
+        results.optimal_params = intermediate_info["parameters"][-1]
+        results.energy = intermediate_info["energy"]
+        results.parameters = intermediate_info["parameters"]
+        results.metadata = intermediate_info["metadata"]
 
         print("=== QISKIT VQE RESULTS ===")
         print("* Electronic ground state "
-              f"energy (Hartree): {result.eigenvalue}")
+              f"energy (Hartree): {qiskit_res.eigenvalue}")
         print(f"* Inactive core energy (Hartree): {self.e_core}")
-        print(
-            f">>> Total ground state energy (Hartree): {self.energy}\n"
-        )
+        print(">>> Total ground state "
+              f"energy (Hartree): {results.optimal_energy}\n")
 
-        return result, intermediate_info
+        return results
+

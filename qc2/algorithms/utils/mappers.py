@@ -26,8 +26,11 @@ class FermionicToQubitMapper:
 
         **Example**
 
+        >>> from qiskit_nature.second_q.mappers import TaperedQubitMapper
         >>> from qc2.algorithms.utils import FermionicToQubitMapper
-        >>> mapper = FermionicToQubitMapper.from_string('jw'))
+        >>>
+        >>> FermionicToQubitMapper.register_mapper('TQM', TaperedQubitMapper)
+        >>> mapper = FermionicToQubitMapper.from_string('tqm')
         """
         if key.upper() in cls._mappers:
             raise ValueError(f"Mapper '{key}' is already registered.")
@@ -50,11 +53,8 @@ class FermionicToQubitMapper:
 
         **Example**
 
-        >>> from qiskit_nature.second_q.mappers import TaperedQubitMapper
         >>> from qc2.algorithms.utils import FermionicToQubitMapper
-        >>>
-        >>> FermionicToQubitMapper.register_mapper('TQM', TaperedQubitMapper)
-        >>> mapper = FermionicToQubitMapper.from_string('tqm')
+        >>> mapper = FermionicToQubitMapper.from_string('jw'))
         """
         try:
             return cls._mappers[s.upper()]

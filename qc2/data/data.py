@@ -29,7 +29,7 @@ try:
 except ImportError:
     PennyLaneOperatorType = object
 
-from qc2.algorithms.base import BaseAlgorithm
+from qc2.algorithms.base.base_algorithm import BaseAlgorithm
 from qc2.ase.qc2_ase_base_class import BaseQc2ASECalculator
 
 
@@ -51,8 +51,8 @@ class qc2Data:
             molecular structure as an ASE :class:`ase.atoms.Atoms` instance.
 
         algorithm (BaseAlgorithm): Instance of the algorithm to be run.
-            Examples are :class:`qc2.algorithm.qiskit.vqe` and
-            :class:`qc2.algorithm.pennylane.oo_vqe`.
+            Examples are :class:`~qc2.algorithm.qiskit.vqe.VQE` and
+            :class:`~qc2.algorithm.pennylane.oo_vqe.oo_VQE`.
     """
 
     def __init__(
@@ -71,8 +71,8 @@ class qc2Data:
             molecule (Atoms): An optional :class:`ase.atoms.Atoms`
                 instance representing the target molecule.
             algorithm (BaseAlgorithm): Algorithm to be run.
-                Examples are :class:`qc2.algorithm.qiskit.vqe` and
-                :class:`qc2.algorithm.pennylane.oo_vqe`.
+                Examples are :class:`~qc2.algorithm.qiskit.vqe.VQE` and
+                :class:`~qc2.algorithm.pennylane.oo_vqe.oo_VQE`.
             schema (Optional[str]): An optional attribute defining the format
                 in which to save qchem data. Options are ``qcschema`` or
                 ``fcidump``. Defaults to ``qcschema``.

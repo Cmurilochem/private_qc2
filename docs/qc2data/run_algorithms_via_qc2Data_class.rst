@@ -58,7 +58,7 @@ Qiskit-Nature with the ``SLSQP`` optimizer, ``qiskit.Estimator`` and ``Bravyi-Ki
     )
 
     # run vqe
-    qc2data.algorithm.run()
+    results = qc2data.algorithm.run()
 
 The second example shows a oo-VQE run for water and PennyLane.
 This now uses ``qcschema`` as data format with the qc2-ASE ``Psi4`` calculator.
@@ -105,7 +105,10 @@ Extra options for PennyLane's ``device`` and ``QNode`` are also added.
     )
 
     # run oo-VQE algorithm with special device and QNode options if needed
-    energy_l, theta_l, kappa_l = qc2data.algorithm.run(
+    results = qc2data.algorithm.run(
         device_kwargs={"shots": None},
         qnode_kwargs={"diff_method": "best"}
     )
+
+where ``results`` in both cases correspond to instances of :class:`~qc2.algorithms.algorithms_results.OOVQEResults`
+and :class:`~qc2.algorithms.algorithms_results.VQEResults` classes, respectively.

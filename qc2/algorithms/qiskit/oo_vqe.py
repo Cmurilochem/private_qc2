@@ -4,7 +4,8 @@ import itertools as itt
 import numpy as np
 from qiskit_nature.second_q.operators import FermionicOp
 from qc2.algorithms.qiskit.vqe import VQE
-from qc2.algorithms.utils import OrbitalOptimization
+from qc2.algorithms.algorithms_results import OOVQEResults
+from qc2.algorithms.utils.orbital_optimization import OrbitalOptimization
 
 
 class oo_VQE(VQE):
@@ -20,9 +21,9 @@ class oo_VQE(VQE):
         freeze_active (bool): If True, freezes the active
             space during optimization.
         orbital_params (List): List of orbital optimization parameters.
-            It gets updated during the optimization process.
+            Defaults to a list with entries of zero.
         circuit_params (List): List of VQE circuit parameters.
-            It gets updated during the optimization process.
+            Defaults to a list with entries of zero.
         oo_problem (OrbitalOptimization): An instance of
             :class:`~qc2.algorithms.utils.orbital_optimization.OrbitalOptimization`
             problem class. Defaults to None.
@@ -62,7 +63,7 @@ class oo_VQE(VQE):
                 or "bk" for ``BravyiKitaevMapper``. Defaults to ``jw``.
             estimator (BaseEstimator): Method for estimating the
                 expectation value. Defaults to :class:`qiskit.Estimator`
-            optimizer (qiskit.Optmizer): Optimization routine for circuit
+            optimizer (qiskit.Optimizer): Optimization routine for circuit
                 variational parameters. Defaults to
                 :class:`qiskit_algorithms.SLSQP`.
             reference_state (QuantumCircuit): Reference state for the VQE
@@ -101,7 +102,7 @@ class oo_VQE(VQE):
         ...     optimizer=SLSQP(),
         ...     estimator=Estimator(),
         ... )
-        >>> energy_l, theta_l, kappa_l = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         super().__init__(
             qc2data,
@@ -121,17 +122,13 @@ class oo_VQE(VQE):
         self.max_iterations = max_iterations
         self.conv_tol = conv_tol
 
-    def run(self) -> Tuple[List, List, List]:
+    def run(self) -> OOVQEResults:
         """Optimizes both the circuit and orbital parameters.
 
         Returns:
-            Tuple[List, List, List]:
-                - energy_l (List): List with final ground-state energies
-                  per iteration.
-                - theta_l (List): List with optimized circuit parameters
-                  per iteration.
-                - kappa_l (List): List with optimized orbital rotation
-                  parameters per iteration.
+            OOVQEResults:
+                An instance of :class:`qc2.algorithms.qiskit.vqe.OOVQEResults`
+                class with all oo-VQE info.
 
         **Example**
 
@@ -156,7 +153,7 @@ class oo_VQE(VQE):
         ...     optimizer=SLSQP(),
         ...     estimator=Estimator(),
         ... )
-        >>> energy_l, theta_l, kappa_l = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         print(">>> Optimizing circuit and orbital parameters...")
 
@@ -175,12 +172,15 @@ class oo_VQE(VQE):
             if self.orbital_params is None
             else self.orbital_params
         )
+
+        # set initial circuit (theta) and orbital rotation (kappa) parameters
         theta = self.circuit_params
         kappa = self.orbital_params
 
+        # create lists to save intermediate energy, circuit and orbital params
+        energy_l = []
         theta_l = []
         kappa_l = []
-        energy_l = []
 
         # get initial energy from initial circuit params
         energy_init = self._get_energy_from_parameters(theta, kappa)
@@ -199,6 +199,7 @@ class oo_VQE(VQE):
             # calculate final energy with all optimized parameters
             energy = self._get_energy_from_parameters(theta, kappa)
 
+            # update lists with intermediate data
             theta_l.append(theta)
             kappa_l.append(kappa)
             energy_l.append(energy)
@@ -207,15 +208,21 @@ class oo_VQE(VQE):
                 print(f"iter = {n+1:03}, energy = {energy:.12f} Ha")
             if n > 1:
                 if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
-                    # save final parameters
-                    self.circuit_params = theta_l[-1]
-                    self.orbital_params = kappa_l[-1]
-                    self.energy = energy_l[-1]
+                    # instantiate OOVQEResults
+                    results = OOVQEResults()
+                    results.optimizer_evals = n
+                    results.optimal_energy = energy_l[-1]
+                    results.optimal_circuit_params = theta_l[-1]
+                    results.optimal_orbital_params = kappa_l[-1]
+                    results.energy = energy_l
+                    results.circuit_parameters = theta_l
+                    results.orbital_parameters = kappa_l
+
                     if self.verbose is not None:
                         print("optimization finished.\n")
                         print("=== QISKIT oo-VQE RESULTS ===")
                         print("* Total ground state "
-                              f"energy (Hartree): {self.energy:.12f}")
+                              f"energy (Hartree): {results.optimal_energy:.12f}")
                     break
         # in case of non-convergence
         else:
@@ -225,7 +232,7 @@ class oo_VQE(VQE):
                 " setting a different 'optimizer'."
             )
 
-        return energy_l, theta_l, kappa_l
+        return results
 
     def _circuit_optimization(
             self,
@@ -247,7 +254,11 @@ class oo_VQE(VQE):
              qubit_op) = self.oo_problem.get_transformed_qubit_hamiltonian(
                  kappa
              )
-            job = self.estimator.run(self.ansatz, qubit_op, theta)
+            job = self.estimator.run(
+                circuits=self.ansatz,
+                observables=qubit_op,
+                parameter_values=theta
+            )
             cost = job.result().values + core_energy
             return cost
 
@@ -330,7 +341,9 @@ class oo_VQE(VQE):
             )
             # calculate expectation values
             energy_temp = self.estimator.run(
-                self.ansatz, qubit_ham_temp, theta
+                circuits=self.ansatz,
+                observables=qubit_ham_temp,
+                parameter_values=theta
             ).result().values
 
             # put the values in np arrays (differentiate 1- and 2-RDM)

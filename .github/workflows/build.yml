@@ -55,18 +55,18 @@ jobs:
         run : |
           conda activate test
           python -m pip install .[dev,publishing,pennylane]
-      - name: PSI4 install for tests
-        shell: bash -l {0}
-        run : |
-          conda activate test
-          conda install psi4 -c conda-forge/label/libint_dev -c conda-forge # these conda channels my change in the future
-      - name: PSI4 info
-        shell: bash -l {0}
-        run : |
-          conda activate test
-          which psi4
-          psi4 --version
-          python -c "import psi4"
+      #- name: PSI4 install for tests
+      #  shell: bash -l {0}
+      #  run : |
+      #    conda activate test
+      #    conda install psi4 -c conda-forge/label/libint_dev -c conda-forge # these conda channels my change in the future
+      #- name: PSI4 info
+      #  shell: bash -l {0}
+      #  run : |
+      #    conda activate test
+      #    which psi4
+      #    psi4 --version
+      #    python -c "import psi4"
       - name: Install Cmake and compilers for ROSE and DIRAC installation
         shell: bash -l {0}
         run: |
@@ -83,9 +83,9 @@ jobs:
         shell: bash -l {0}
         run: |
           conda activate test
-          git clone https://gitlab.com/Cmurilochem/rose.git  # https://gitlab.com/quantum_rose/rose.git
+          conda install anaconda::hdf5
+          git clone https://gitlab.com/quantum_rose/rose.git
           cd rose
-          git checkout ROSE_ase_calculator # this change in branch is only provisory
           if [[ ${{ matrix.os }} == 'macos-latest' ]]; then
             cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DBLAS_LIBRARIES=$CONDA_PREFIX/lib/libblas.dylib -DLAPACK_LIBRARIES=$CONDA_PREFIX/lib/liblapack.dylib
           else
@@ -94,12 +94,13 @@ jobs:
           cmake --build build
           cmake --install build
           echo `pwd`/bin >> $GITHUB_PATH
+          pip install ./ase_rose
           cd ..
       #- name: DIRAC install for tests
       #  shell: bash -l {0}
       #  run: |
       #    conda activate test
-      #    git clone --recursive --branch v23.0 https://gitlab.com/dirac/dirac.git
+      #    git clone --depth 1 --recursive https://gitlab.com/dirac/dirac.git
       #    cd dirac
       #    if [[ ${{ matrix.os }} == 'macos-latest' ]]; then
       #      ./setup --prefix=$CONDA_PREFIX --blas=$CONDA_PREFIX/lib/libblas.dylib --lapack=$CONDA_PREFIX/lib/liblapack.dylib --pcmsolver=OFF --exatensor=OFF

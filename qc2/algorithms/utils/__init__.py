@@ -1,3 +1,4 @@
+"""qc2 utils package."""
 from .active_space import get_active_space_idx, ActiveSpace
 from .helper_funcs import (
     vector_to_skew_symmetric,

@@ -1,3 +1,4 @@
+"""qc2 algorithms package for qiskit."""
 from .vqe import VQE
 from .oo_vqe import oo_VQE
 

@@ -48,22 +48,28 @@ def test_initialization(oo_vqe):
 def test_theta_kappa_optimization(oo_vqe):
     """Test optimization workflow."""
     # optimize all params
-    energy_l, theta_l, kappa_l = oo_vqe.run()
+    results = oo_vqe.run()
     # calculate energies with best params
     opt_theta, energy_opt_theta = oo_vqe._circuit_optimization(
-        oo_vqe.circuit_params,
-        oo_vqe.orbital_params
+        results.optimal_circuit_params,
+        results.optimal_orbital_params
     )
     energy_from_params = oo_vqe._get_energy_from_parameters(
-        oo_vqe.circuit_params,
-        oo_vqe.orbital_params
+        results.optimal_circuit_params,
+        results.optimal_orbital_params
     )
 
-    assert all(isinstance(num, float) for num in energy_l)
-    assert all(isinstance(term, np.ndarray) for term in theta_l)
-    assert all(isinstance(term, list) for term in kappa_l)
-    assert all(num != 0 for num in oo_vqe.orbital_params)
-    assert oo_vqe.energy == pytest.approx(-1.1373015, 1e-6)
-    assert energy_opt_theta == pytest.approx(oo_vqe.energy, 1e-6)
-    assert energy_from_params == pytest.approx(oo_vqe.energy, 1e-6)
-    assert opt_theta == pytest.approx(oo_vqe.circuit_params, 1e-6)
+    assert all(
+        isinstance(num, float) for num in results.energy
+    )
+    assert all(
+        isinstance(term, np.ndarray) for term in results.circuit_parameters
+    )
+    assert all(
+        isinstance(term, list) for term in results.orbital_parameters
+    )
+    assert all(num != 0 for num in results.optimal_orbital_params)
+    assert results.optimal_energy == pytest.approx(-1.1373015, 1e-6)
+    assert energy_opt_theta == pytest.approx(results.optimal_energy, 1e-6)
+    assert energy_from_params == pytest.approx(results.optimal_energy, 1e-6)
+    assert opt_theta == pytest.approx(results.optimal_circuit_params, 1e-6)

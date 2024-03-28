@@ -3,8 +3,9 @@ from typing import List, Tuple
 import itertools as itt
 from pennylane import numpy as np
 from qiskit_nature.second_q.operators import FermionicOp
-from qc2.algorithms.pennylane import VQE
-from qc2.algorithms.utils import OrbitalOptimization
+from qc2.algorithms.pennylane.vqe import VQE
+from qc2.algorithms.algorithms_results import OOVQEResults
+from qc2.algorithms.utils.orbital_optimization import OrbitalOptimization
 from qc2.pennylane.convert import _qiskit_nature_to_pennylane
 
 
@@ -19,9 +20,9 @@ class oo_VQE(VQE):
         freeze_active (bool): If True, freezes the active
             space during optimization.
         orbital_params (List): List of orbital optimization parameters.
-            It gets updated during the optimization process.
+            Defaults to a list with entries of zero.
         circuit_params (List): List of VQE circuit parameters.
-            It gets updated during the optimization process.
+            Defaults to a list with entries of zero.
         oo_problem (OrbitalOptimization): An instance of
             :class:`~qc2.algorithms.utils.orbital_optimization.OrbitalOptimization`
             problem class. Defaults to None.
@@ -101,7 +102,7 @@ class oo_VQE(VQE):
         ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
         ...     device="default.qubit"
         ... )
-        >>> energy_l, theta_l, kappa_l = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         super().__init__(
             qc2data,
@@ -133,7 +134,7 @@ class oo_VQE(VQE):
         """
         return [0.0] * n_kappa
 
-    def run(self, *args, **kwargs) -> Tuple[List, List, List]:
+    def run(self, *args, **kwargs) -> OOVQEResults:
         """Optimizes both the circuit and orbital parameters.
 
         Args:
@@ -145,13 +146,9 @@ class oo_VQE(VQE):
                 - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
 
         Returns:
-            Tuple[List, List, List]:
-                - energy_l (List): List with final ground-state energies
-                  per iteration.
-                - theta_l (List): List with optimized circuit parameters
-                  per iteration.
-                - kappa_l (List): List with optimized orbital rotation
-                  parameters per iteration.
+            OOVQEResults:
+                An instance of :class:`qc2.algorithms.pennylane.vqe.OOVQEResults`
+                class with all oo-VQE info.
 
         **Example**
 
@@ -175,7 +172,7 @@ class oo_VQE(VQE):
         ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
         ...     device="default.qubit"
         ... )
-        >>> energy_l, theta_l, kappa_l = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         print(">>> Optimizing circuit and orbital parameters...")
 
@@ -194,12 +191,15 @@ class oo_VQE(VQE):
             if self.orbital_params is None
             else self.orbital_params
         )
+
+        # set initial circuit (theta) and orbital rotation (kappa) parameters
         theta = self.circuit_params
         kappa = self.orbital_params
 
+        # create lists to save intermediate energy, circuit and orbital params
+        energy_l = []
         theta_l = []
         kappa_l = []
-        energy_l = []
 
         # get initial energy from initial circuit params
         energy_init = self._get_energy_from_parameters(
@@ -224,6 +224,7 @@ class oo_VQE(VQE):
                 theta, kappa, *args, **kwargs
             )
 
+            # update lists with intermediate data
             theta_l.append(theta)
             kappa_l.append(kappa)
             energy_l.append(energy)
@@ -232,15 +233,21 @@ class oo_VQE(VQE):
                 print(f"iter = {n+1:03}, energy = {energy:.12f} Ha")
             if n > 1:
                 if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
-                    # save final parameters
-                    self.circuit_params = theta_l[-1]
-                    self.orbital_params = kappa_l[-1]
-                    self.energy = energy_l[-1]
+                    # instantiate OOVQEResults
+                    results = OOVQEResults()
+                    results.optimizer_evals = n
+                    results.optimal_energy = energy_l[-1]
+                    results.optimal_circuit_params = theta_l[-1]
+                    results.optimal_orbital_params = kappa_l[-1]
+                    results.energy = energy_l
+                    results.circuit_parameters = theta_l
+                    results.orbital_parameters = kappa_l
+
                     if self.verbose is not None:
                         print("optimization finished.\n")
                         print("=== PENNYLANE oo-VQE RESULTS ===")
                         print("* Total ground state "
-                              f"energy (Hartree): {self.energy:.12f}")
+                              f"energy (Hartree): {results.optimal_energy:.12f}")
                     break
         # in case of non-convergence
         else:
@@ -250,7 +257,7 @@ class oo_VQE(VQE):
                 " setting a different 'optimizer'."
             )
 
-        return energy_l, theta_l, kappa_l
+        return results
 
     def _circuit_optimization(
             self,

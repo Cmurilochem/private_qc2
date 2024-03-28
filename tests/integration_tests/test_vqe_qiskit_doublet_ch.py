@@ -56,9 +56,9 @@ def vqe_calculation():
     )
 
     # run the calc
-    qc2data.algorithm.run()
+    results = qc2data.algorithm.run()
 
-    return qc2data.algorithm.energy
+    return results.optimal_energy
 
 
 # @pytest.mark.skip(reason="Takes a long time because of UHF ??")

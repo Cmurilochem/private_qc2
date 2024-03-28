@@ -14,12 +14,14 @@ try:
 except ImportError:
     PennyLaneOperatorType = object
 
-from qc2.data import qc2Data
-from qc2.algorithms.utils import (
+from qc2.data.data import qc2Data
+from qc2.algorithms.utils.active_space import (
     ActiveSpace,
+    get_active_space_idx
+)
+from qc2.algorithms.utils.helper_funcs import (
     vector_to_skew_symmetric,
     skew_symmetric_to_vector,
-    get_active_space_idx,
     reshape_2,
     get_non_redundant_indices
 )
@@ -33,11 +35,11 @@ class OrbitalOptimization():
     orbital optimization part of the oo-VQE algorithm.
 
     Attributes:
-        qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`.
+        qc2data (qc2Data): An instance of :class:`~qc2.data.data.qc2Data`.
         schema_dataclass (QCSchema): An instance of :class:`QCSchema`.
         es_problem (ElectronicStructureProblem): Instance of
             :class:`ElectronicStructureProblem` in AO basis as
-            processed from :meth:`~qc2.data.qc2Data.process_schema`.
+            processed from :meth:`~qc2.data.data.qc2Data.process_schema`.
         n_electrons (Tuple[int, int]): Number of alpha and beta electrons.
         nao (int): Number of spatial orbitals.
         n_active_orbitals (int): Number of active orbitals to consider.
@@ -63,10 +65,10 @@ class OrbitalOptimization():
         Initializes the OrbitalOptimization class.
 
         Args:
-            qc2data (qc2Data): An instance of :class:`~qc2.data.qc2Data`
+            qc2data (qc2Data): An instance of :class:`~qc2.data.data.qc2Data`
                 containing quantum chemistry information.
             active_space (ActiveSpace): Instance of
-                :class:`~qc2.algorithms.utils.ActiveSpace`
+                :class:`~qc2.algorithms.utils.activate_space.ActiveSpace`
                 containing the description of the active space.
             freeze_active (bool, optional): If True, active orbitals will be
                 frozen in the optimization process. Defaults to False.
@@ -572,12 +574,12 @@ class OrbitalOptimization():
         kappa_total_vector[np.array(self.params_idx)] = kappa
         return vector_to_skew_symmetric(kappa_total_vector)
 
-    def _kappa_matrix_to_vector(self, kappa_matrix):
+    def _kappa_matrix_to_vector(self, kappa_matrix: np.ndarray) -> np.ndarray:
         """Generate orbital rotation parameters from a skew-symmetric matrix"""
         kappa_total_vector = skew_symmetric_to_vector(kappa_matrix)
         return kappa_total_vector[self.params_idx]
 
-    def _full_hessian_to_matrix(self, full_hess):
+    def _full_hessian_to_matrix(self, full_hess: np.ndarray) -> np.ndarray:
         """Convert the full Hessian to a matrix with only non-red. indices."""
         tril_indices = np.tril_indices(self.nao, k=-1)
         partial_hess = full_hess[tril_indices[0], tril_indices[1], :, :]

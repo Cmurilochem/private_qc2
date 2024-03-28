@@ -30,7 +30,8 @@ qc2data.algorithm = oo_VQE(
 )
 
 # run oo-VQE
-energy_l, theta_l, kappa_l = qc2data.algorithm.run(
+results = qc2data.algorithm.run(
     device_kwargs={"shots": None},
     qnode_kwargs={"diff_method": "best"}
 )
+

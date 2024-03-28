@@ -103,10 +103,10 @@ def test_default_init_params():
 
 def test_run_method(vqe):
     """Test main VQE workflow."""
-    energy_l, theta_l = vqe.run()
-    assert isinstance(vqe.energy, float)
-    assert vqe.energy == pytest.approx(-1.1373015, 1e-6)
-    assert all(num != 0 for num in vqe.params)
-    assert all(isinstance(num, float) for num in energy_l)
-    assert all(isinstance(num, list) for num in theta_l)
+    results = vqe.run()
+    assert isinstance(results.optimal_energy, float)
+    assert results.optimal_energy == pytest.approx(-1.1373015, 1e-6)
+    assert all(num != 0 for num in results.optimal_params)
+    assert all(isinstance(num, float) for num in results.energy)
+    assert all(isinstance(num, list) for num in results.parameters)
 

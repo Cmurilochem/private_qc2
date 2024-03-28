@@ -1,3 +1,4 @@
+"""Module defining base class for all algorithms."""
 from abc import ABC
 
 
@@ -11,3 +12,4 @@ class BaseAlgorithm(ABC):
     def run(self, *args, **kwargs):
         """run it"""
         raise NotImplementedError("BaseAlgorithm doens't have a .run() implemented ")
+

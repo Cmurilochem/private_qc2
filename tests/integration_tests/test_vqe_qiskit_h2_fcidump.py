@@ -53,9 +53,9 @@ def vqe_calculation():
     )
 
     # run vqe
-    qc2data.algorithm.run()
+    results = qc2data.algorithm.run()
 
-    return qc2data.algorithm.energy
+    return results.optimal_energy
 
 
 def test_vqe_calculation(vqe_calculation):

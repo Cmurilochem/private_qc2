@@ -1,11 +1,12 @@
 """Module defining VQE algorithm for PennyLane."""
-from typing import List, Tuple, Callable
 import pennylane as qml
 from pennylane import numpy as np
 from pennylane import QNode
 from pennylane.operation import Operator
-from qc2.algorithms.utils import ActiveSpace, FermionicToQubitMapper
-from qc2.algorithms.base import VQEBASE
+from qc2.algorithms.utils.active_space import ActiveSpace
+from qc2.algorithms.utils.mappers import FermionicToQubitMapper
+from qc2.algorithms.base.vqe_base import VQEBASE
+from qc2.algorithms.algorithms_results import VQEResults
 
 
 class VQE(VQEBASE):
@@ -30,8 +31,7 @@ class VQE(VQEBASE):
             to ``qml.GradientDescentOptimizer``.
         reference_state (qml.ref_state): Reference state for the VQE
             algorithm. Defaults to ``qml.qchem.hf_state``.
-        params (List): List of VQE circuit parameters.
-            It gets updated during the optimization process.
+        params (List): List of initial VQE circuit parameters.
             Defaults to a list with entries of zero.
         max_iterations (int): Maximum number of iterations for the combined
             circuit-orbitals parameters optimization. Defaults to 50.
@@ -39,7 +39,6 @@ class VQE(VQEBASE):
             Defaults to 1e-7.
         verbose (int): Verbosity level. Defaults to 0.
         circuit (QNode): Quantum circuit generated for the VQE algorithm.
-        energy (float): Calculated energy after running VQE. Defaults to None.
     """
 
     def __init__(
@@ -106,7 +105,7 @@ class VQE(VQEBASE):
         ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
         ...     device="default.qubit"
         ... )
-        >>> energy_l, theta_l = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         super().__init__(qc2data, "pennylane")
 
@@ -152,7 +151,6 @@ class VQE(VQEBASE):
         self.conv_tol = conv_tol
         self.verbose = verbose
         self.circuit = None
-        self.energy = None
 
     @staticmethod
     def _get_default_reference(qubits: int, electrons: int) -> np.ndarray:
@@ -257,7 +255,7 @@ class VQE(VQEBASE):
 
         return circuit
 
-    def run(self, *args, **kwargs) -> Tuple[List, List]:
+    def run(self, *args, **kwargs) -> VQEResults:
         """Executes VQE algorithm.
 
         Args:
@@ -269,11 +267,9 @@ class VQE(VQEBASE):
                 - qnode_kwargs (optional): ``qml.qnode`` keyword arguments.
 
         Returns:
-            Tuple[List, List]:
-                - energy_l (List): List with final ground-state energies
-                  per iteration.
-                - theta_l (List): List with optimized circuit parameters
-                  per iteration.
+            VQEResults:
+                An instance of :class:`qc2.algorithms.pennylane.vqe.VQEResults`
+                class with all VQE info.
 
         **Example**
 
@@ -297,7 +293,7 @@ class VQE(VQEBASE):
         ...     optimizer=qml.GradientDescentOptimizer(stepsize=0.5),
         ...     device="default.qubit"
         ... )
-        >>> energy_l, theta_l = qc2data.algorithm.run()
+        >>> results = qc2data.algorithm.run()
         """
         print(">>> Optimizing circuit parameters...")
 
@@ -313,15 +309,20 @@ class VQE(VQEBASE):
             *args, **kwargs
         )
 
+        # set initial theta parameters
         theta = self.params
+
+        # create lists to save intermediate energy and circuit params
         energy_l = []
         theta_l = []
 
-        # Optimize the circuit parameters and compute the energy
+        # optimize the circuit parameters and compute the energy
         for n in range(self.max_iterations):
             theta, corr_energy = self.optimizer.step_and_cost(
                 self.circuit, theta
             )
+
+            # update lists with intermediate data
             energy = corr_energy + self.e_core
             energy_l.append(energy.numpy())
             theta_l.append(theta.numpy().tolist())
@@ -331,11 +332,16 @@ class VQE(VQEBASE):
                     print(f"iter = {n:03}, energy = {energy_l[-1]:.12f} Ha")
 
             if n > 1:
-                if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:
-                    # save final parameters
+                if abs(energy_l[-1] - energy_l[-2]) < self.conv_tol:                    
+                    # instantiate VQEResults
+                    results = VQEResults()
+                    results.optimizer_evals = n
+                    results.optimal_energy = energy_l[-1]
+                    results.optimal_params = theta_l[-1]
+                    results.energy = energy_l
+                    results.parameters = theta_l
+
                     if self.verbose is not None:
-                        self.params = theta_l[-1]
-                        self.energy = energy_l[-1]
                         print("optimization finished.\n")
                         print("=== PENNYLANE VQE RESULTS ===")
                         print("* Electronic ground state "
@@ -343,7 +349,7 @@ class VQE(VQEBASE):
                         print("* Inactive core "
                               f"energy (Hartree): {self.e_core:.12f}")
                         print(">>> Total ground state "
-                              f"energy (Hartree): {self.energy:.12f}\n")
+                              f"energy (Hartree): {results.optimal_energy:.12f}\n")
                     break
         # in case of non-convergence
         else:
@@ -353,4 +359,4 @@ class VQE(VQEBASE):
                 " setting a different 'optimizer'."
             )
 
-        return energy_l, theta_l
+        return results
