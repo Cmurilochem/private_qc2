@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['ubuntu-latest', 'macos-latest'] #, 'windows-latest']
-        python-version: ['3.9'] #['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.11'] #['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
         include:
           - os: ubuntu-latest
             CONDA_OS: linux-64
@@ -55,47 +55,51 @@ jobs:
         run : |
           conda activate test
           python -m pip install .[dev,publishing,pennylane]
-      #- name: PSI4 install for tests
-      #  shell: bash -l {0}
-      #  run : |
-      #    conda activate test
-      #    conda install psi4 -c conda-forge/label/libint_dev -c conda-forge # these conda channels my change in the future
-      #- name: PSI4 info
-      #  shell: bash -l {0}
-      #  run : |
-      #    conda activate test
-      #    which psi4
-      #    psi4 --version
-      #    python -c "import psi4"
-      - name: Install Cmake and compilers for ROSE and DIRAC installation
+      - name: PSI4 install for tests
         shell: bash -l {0}
-        run: |
+        run : |
           conda activate test
-          conda install -c anaconda cmake
-          conda install conda-forge::blas
-          conda install conda-forge::lapack
-          if [[ ${{ matrix.os }} == 'macos-latest' ]]; then
-            conda install -c conda-forge gfortran clang clangxx
-          else
-            conda install -c conda-forge gfortran gcc gxx
-          fi
-      - name: ROSE install for tests
+          conda install psi4 -c conda-forge/label/libint_dev -c conda-forge # these conda channels my change in the future
+      - name: PSI4 info
         shell: bash -l {0}
-        run: |
+        run : |
           conda activate test
-          conda install anaconda::hdf5
-          git clone https://gitlab.com/quantum_rose/rose.git
-          cd rose
-          if [[ ${{ matrix.os }} == 'macos-latest' ]]; then
-            cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DBLAS_LIBRARIES=$CONDA_PREFIX/lib/libblas.dylib -DLAPACK_LIBRARIES=$CONDA_PREFIX/lib/liblapack.dylib
-          else
-            cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DBLAS_LIBRARIES=$CONDA_PREFIX/lib/libblas.so -DLAPACK_LIBRARIES=$CONDA_PREFIX/lib/liblapack.so
-          fi
-          cmake --build build
-          cmake --install build
-          echo `pwd`/bin >> $GITHUB_PATH
-          pip install ./ase_rose
-          cd ..
+          which psi4
+          psi4 --version
+          python -c "import psi4"
+      #- name: Install Cmake and compilers for ROSE and DIRAC installation
+      #  shell: bash -l {0}
+      #  run: |
+      #    conda activate test
+      #    conda install -c anaconda cmake
+      #    conda install conda-forge::blas
+      #    conda install conda-forge::lapack
+      #    if [[ ${{ matrix.os }} == 'macos-latest' ]]; then
+      #      conda install -c conda-forge gfortran clang clangxx
+      #    else
+      #      conda install -c conda-forge gfortran gcc gxx
+      #    fi
+      #- name: install HDF5 libraries
+      #  shell: bash -l {0}
+      #  run: |
+      #    conda activate test
+      #    conda install -c anaconda hdf5
+      #- name: ROSE install for tests
+      #  shell: bash -l {0}
+      #  run: |
+      #    conda activate test
+      #    git clone https://gitlab.com/quantum_rose/rose.git
+      #    cd rose
+      #    if [[ ${{ matrix.os }} == 'macos-latest' ]]; then
+      #      cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DBLAS_LIBRARIES=$CONDA_PREFIX/lib/libblas.dylib -DLAPACK_LIBRARIES=$CONDA_PREFIX/lib/liblapack.dylib
+      #    else
+      #      cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DBLAS_LIBRARIES=$CONDA_PREFIX/lib/libblas.so -DLAPACK_LIBRARIES=$CONDA_PREFIX/lib/liblapack.so
+      #    fi
+      #    cmake --build build
+      #    cmake --install build
+      #    echo `pwd`/bin >> $GITHUB_PATH
+      #    pip install ./ase_rose
+      #    cd ..
       #- name: DIRAC install for tests
       #  shell: bash -l {0}
       #  run: |
