@@ -1,4 +1,5 @@
 """Module defining VQE algorithm for PennyLane."""
+from typing import Callable
 import pennylane as qml
 from pennylane import numpy as np
 from pennylane import QNode

@@ -1,4 +1,5 @@
 """Module defining VQE algorithm for Qiskit-Nature."""
+from typing import List, Dict
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 from qiskit_nature.second_q.mappers import QubitMapper
 from qiskit_algorithms.minimum_eigensolvers import VQE as vqe_solver
