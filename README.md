@@ -32,13 +32,13 @@ qc2 is a modular software designed to seamlessly integrate traditional computati
 and quantum computing frameworks.
 It is specifically crafted for hybrid quantum-classical workflows
 such as the variational quantum eigensolver (VQE) algorithm.
-The software relies on custom `ASE calculators <https://wiki.fysik.dtu.dk/ase/>`_ as well as formatted data files
-(*e.g.*, `QCSchema <https://molssi.org/software/qcschema-2/>`_ or `FCIDUMP <https://www.sciencedirect.com/science/article/abs/pii/0010465589900337?via%3Dihub>`_) to efficiently offload 1- and 2-electron
+The software relies on custom [ASE calculators](https://wiki.fysik.dtu.dk/ase/) as well as formatted data files
+(*e.g.*, [QCSchema](https://molssi.org/software/qcschema-2/) or [FCIDUMP](https://www.sciencedirect.com/science/article/abs/pii/0010465589900337?via%3Dihub)) to efficiently offload 1- and 2-electron
 integrals needed by various Python quantum computing libraries.
 
-The qc2 software is a direct outcome of the `QCforQC project <https://research-software-directory.org/projects/qcforqc>`_,
-a collaboration between `Netherlands eScience Center <https://www.esciencecenter.nl/>`_,
-`Vrije Universiteit Amsterdam (VU) <https://vu.nl/nl>`_ and `SURF <https://www.surf.nl/>`_.
+The qc2 software is a direct outcome of the [QCforQC project](https://research-software-directory.org/projects/qcforqc),
+a collaboration between [Netherlands eScience Center](https://www.esciencecenter.nl/),
+[Vrije Universiteit Amsterdam (VU)](https://research.vu.nl/en/persons/luuk-visscher) and [SURF](https://www.surf.nl/en/themes/quantum).
 
 To access qc2's capabilities and current status, please refer to its documentation at https://qc2.readthedocs.io.
 
@@ -52,7 +52,7 @@ cd qc2
 python3 -m pip install -e .
 ```
 
-In this current version, qc2 can perform hybrid quantum-classical calculations using both `Qiskit Nature <https://qiskit.org/ecosystem/nature/>`_ and `PennyLane <https://pennylane.ai/>`_. However, the latter is an optional dependency. To install `Pennylane` and perform automatic testing with it, follow these steps:
+In this current version, qc2 can perform hybrid quantum-classical calculations using both [Qiskit Nature](https://qiskit.org/ecosystem/nature/) and [PennyLane](https://pennylane.ai/). However, the latter is an optional dependency. To install `Pennylane` and perform automatic testing with it, follow these steps:
 ```console
 git clone git@github.com:qc2nl/qc2.git
 cd qc2
