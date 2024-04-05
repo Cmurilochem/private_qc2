@@ -56,8 +56,8 @@ def vqe_calculation():
     # set up VQE calc
     qc2data.algorithm = VQE(
         active_space=ActiveSpace(
-            num_active_electrons=(1, 1),
-            num_active_spatial_orbitals=2
+            num_active_electrons=(2, 2),
+            num_active_spatial_orbitals=3
         ),
         mapper="jw",
         optimizer=qml.GradientDescentOptimizer(stepsize=0.5)
